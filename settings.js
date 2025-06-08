@@ -52,7 +52,7 @@ const settings = {
     // specify speech model inside each profile - so that you can have each bot with different voices ;)
     
     "stt_transcription": false, // enable speech-to-text transcription
-    "stt_provider": "groq", // STT provider: "groq" (requires API key) or "pollinations" (free)
+    "stt_provider": "pollinations", // STT provider: "groq" (requires API key) or "pollinations" (free)
     "stt_username": "SERVER", // username for STT messages
     "stt_agent_name": "", // agent name for STT messages, if empty it will send the STT to all bots
     
