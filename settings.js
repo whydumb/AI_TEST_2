@@ -51,7 +51,6 @@ const settings = {
     "narrate_behavior": true, // chat simple automatic actions ('Picking up item!')
     "chat_bot_messages": true, // publicly chat messages to other bots
 
-    "speak": false, // enable text-to-speech
     "stt_transcription": false, // enable speech-to-text transcription
     "stt_provider": "groq", // STT provider: "groq" (requires API key) or "pollinations" (free)
     "stt_username": "SERVER", // username for STT messages
@@ -74,6 +73,21 @@ const settings = {
 }
 
 // these environment variables override certain settings
+if (process.env.SETTINGS_PATH) {
+  try {
+    const cfgPath = path.resolve(process.env.SETTINGS_PATH);
+    if (fs.existsSync(cfgPath)) {
+      const raw = fs.readFileSync(cfgPath, 'utf-8');
+      const overrides = JSON.parse(raw);
+      Object.assign(settings, overrides);
+      console.log(`Loaded overrides from ${cfgPath}`);
+    } else {
+      console.warn(`SETTINGS_PATH file not found: ${cfgPath}`);
+    }
+  } catch (err) {
+    console.error("Failed to load SETTINGS_PATH overrides:", err);
+  }
+}
 if (process.env.MINECRAFT_PORT) {
     settings.port = process.env.MINECRAFT_PORT;
 }

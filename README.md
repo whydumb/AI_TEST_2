@@ -1,14 +1,24 @@
-# Mindcraft 🧠⛏️
+# Mindcraft Community Edition 🧠⛏️
+
+>[!Note]
+> This fork of mindcraft is maintained by the community, and has extra features not present in the official repo.
+
+## Extra community-added features
+
+- Pollinations.ai provider support for use without a key.
+- TTS and STT support for natural, voice conversations with the bot.
+- mineflayer version is 4.29.0, which includes more patches and features
+- More coming soon!
 
 Crafting minds for Minecraft with LLMs and [Mineflayer!](https://prismarinejs.github.io/mineflayer/#/)
 
 [FAQ](https://github.com/kolbytn/mindcraft/blob/main/FAQ.md) | [Discord Support](https://discord.gg/mp73p35dzC) | [Video Tutorial](https://www.youtube.com/watch?v=gRotoL8P8D8) | [Blog Post](https://kolbynottingham.com/mindcraft/) | [Contributor TODO](https://github.com/users/kolbytn/projects/1) | [Paper Website](https://mindcraft-minecollab.github.io/index.html) | [MineCollab](https://github.com/kolbytn/mindcraft/blob/main/minecollab.md) 
 
-
 > [!Caution]
 Do not connect this bot to public servers with coding enabled. This project allows an LLM to write/execute code on your computer. The code is sandboxed, but still vulnerable to injection attacks. Code writing is disabled by default, you can enable it by setting `allow_insecure_coding` to `true` in `settings.js`. Ye be warned.
 
-# Migrating PRs from the previous repo
+<details>
+  <summary>Migrating PRs from the previous repo</summary>
 1. **Clone the fork** with the PR (`fork-A`).
 2. Add `mindcraft-ce` as a remote:
 
@@ -16,13 +26,15 @@ Do not connect this bot to public servers with coding enabled. This project allo
 git remote add mindcraft-ce https://github.com/mindcraft-ce/mindcraft-ce.git
 ```
 
-3. Push the branch to `mindcraft-ce:
+3. Push the branch to `mindcraft-ce`:
 
 ```bash
 git push mindcraft-ce your-branch-name
 ```
 
 4. On GitHub, go to `mindcraft-ce`, switch to `your-branch-name`, and create a PR to the desired branch in `mindcraft-ce`.
+
+</details>
 
 ## Requirements
 
