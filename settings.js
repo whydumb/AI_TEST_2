@@ -51,7 +51,6 @@ const settings = {
     "narrate_behavior": true, // chat simple automatic actions ('Picking up item!')
     "chat_bot_messages": true, // publicly chat messages to other bots
 
-    "speak": false, // enable text-to-speech
     "stt_transcription": false, // enable speech-to-text transcription
     "stt_username": "SERVER", // username for STT messages
     "stt_agent_name": "", // agent name for STT messages, if empty it will send the STT to all bots
