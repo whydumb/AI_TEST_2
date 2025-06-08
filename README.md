@@ -40,7 +40,7 @@ git push mindcraft-ce your-branch-name
 
 - [Minecraft Java Edition](https://www.minecraft.net/en-us/store/minecraft-java-bedrock-edition-pc) (up to v1.21.1, recommend v1.20.4)
 - [Node.js Installed](https://nodejs.org/) (at least v14)
-- One of these:
+- One of these (optional, you can also use pollinations.ai without any key):
   - [OpenAI API Key](https://openai.com/blog/openai-api)
   - [Gemini API Key](https://aistudio.google.com/app/apikey)
   - [Anthropic API Key](https://docs.anthropic.com/claude/docs/getting-access-to-claude)
@@ -58,7 +58,7 @@ git push mindcraft-ce your-branch-name
 
 2. Clone or download this repository (big green button)
 
-3. Rename `keys.example.json` to `keys.json` and fill in your API keys (you only need one). The desired model is set in `andy.json` or other profiles. For other models refer to the table below.
+3.  [If you are using pollinations.ai, you can skip this step.] Rename `keys.example.json` to `keys.json` and fill in your API keys (you only need one). The desired model is set in `andy.json` or other profiles. For other models refer to the table below.
 
 4. In terminal/command prompt, run `npm install` from the installed directory. (Note: If `naudiodon` fails to build and you don't need STT, you can usually proceed.)
 
@@ -66,7 +66,7 @@ git push mindcraft-ce your-branch-name
 
 6. Run `node main.js` from the installed directory
 
-If you encounter issues, check the [FAQ](https://github.com/kolbytn/mindcraft/blob/main/FAQ.md) or find support on [discord](https://discord.gg/mp73p35dzC). We are currently not very responsive to github issues.
+If you encounter issues, check the [FAQ](https://github.com/mindcraft-ce/mindcraft-ce/blob/main/FAQ.md) or find support on [discord](https://discord.gg/mp73p35dzC). We are currently responsive to github issues.
 
 ## Tasks
 
@@ -129,15 +129,16 @@ If you use Ollama, to install the models used by default (generation and embeddi
 To connect to online servers your bot will need an official Microsoft/Minecraft account. You can use your own personal one, but will need another account if you want to connect too and play with it. To connect, change these lines in `settings.js`:
 ```javascript
 "host": "111.222.333.444",
-"port": 55920,
+"port": 25565,
 "auth": "microsoft",
 
 // rest is same...
 ```
 > [!Important]
 > The bot's name in the profile.json must exactly match the Minecraft profile name! Otherwise the bot will spam talk to itself.
+> Example: If you are signing in with a Microsoft account, with the username "Player01", then you need to set the name in profile to "Player01".
 
-To use different accounts, Mindcraft will connect with the account that the Minecraft launcher is currently using. You can switch accounts in the launcer, then run `node main.js`, then switch to your main account after the bot has connected.
+When using a Microsoft account for mindcraft, it will show a link and a code. Open the link in the browser, sign in with the Microsoft account you wish for the bot to use, and follow the on-screen instructions.
 
 ### Docker Container
 
@@ -177,7 +178,8 @@ The Text to Speech engine will begin listening on the system default input devic
 - **Groq**: You **need** a [GroqCloud API key](https://console.groq.com/keys) as Groq is used for Audio transcription
 - **Pollinations**: Free STT service, no API key required. Uses the `openai-audio` model via the Pollinations API
 
-To use Pollinations STT, simply set `"stt_provider": "pollinations"` in your settings.js file. This provides a free alternative to Groq for speech-to-text transcription.
+To use Groq STT, simply set `"stt_provider": "groq"` in your settings.js file. This provides an alternative to pollinations for speech-to-text transcription.
+<!-- UPDATED BECAUSE POLLINATIONS IS NOW DEFAULT -->
 
 # Bot Profiles
 
