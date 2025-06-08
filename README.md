@@ -16,7 +16,7 @@ Do not connect this bot to public servers with coding enabled. This project allo
 2. Add `mindcraft-ce` as a remote:
 
 ```bash
-git remote add fork-b https://github.com/mindcraft-ce/mindcraft-ce.git
+git remote add mindcraft-ce https://github.com/mindcraft-ce/mindcraft-ce.git
 ```
 
 3. Push the branch to `mindcraft-ce:
