@@ -1,4 +1,5 @@
 import { strictFormat } from "../utils/text.js";
+import fs from 'fs';
 
 export class Pollinations {
     // models: https://text.pollinations.ai/models
@@ -106,5 +107,72 @@ export async function sendAudioRequest(text, model, voice, url) {
     } catch (err) {
         console.error("TTS fetch failed:", err);
         return null;
+    }
+}
+
+export async function sendSTTRequest(audioFilePath, url) {
+    try {
+        // Read the audio file and convert to base64
+        const audioBuffer = fs.readFileSync(audioFilePath);
+        const base64Audio = audioBuffer.toString('base64');
+        
+        // Determine audio format from file extension
+        const audioFormat = audioFilePath.split('.').pop().toLowerCase();
+        const supportedFormats = ['mp3', 'wav'];
+        
+        if (!supportedFormats.includes(audioFormat)) {
+            console.warn(`[Pollinations STT] Warning: Audio format '${audioFormat}' may not be supported. Supported formats: ${supportedFormats.join(', ')}`);
+        }
+
+        const payload = {
+            model: "openai-audio",
+            messages: [
+                {
+                    role: "user",
+                    content: [
+                        { type: "text", text: "Transcribe this audio:" },
+                        {
+                            type: "input_audio",
+                            input_audio: {
+                                data: base64Audio,
+                                format: audioFormat
+                            }
+                        }
+                    ]
+                }
+            ]
+        };
+
+        console.log(`Awaiting Pollinations STT response...`);
+        const response = await fetch(url || "https://text.pollinations.ai/openai", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            console.error(`Failed to receive STT response. Status`, response.status, (await response.text()));
+            return null;
+        }
+
+        const result = await response.json();
+        const transcription = result.choices[0].message.content;
+        return transcription;
+
+    } catch (err) {
+        console.error(`Failed to transcribe audio with Pollinations.`, err?.message || err);
+        return null;
+    }
+}
+
+export class PollinationsSTT {
+    constructor(url) {
+        this.url = url || "https://text.pollinations.ai/openai";
+    }
+
+    async transcribe(filePath, options = {}) {
+        return await sendSTTRequest(filePath, this.url);
     }
 }

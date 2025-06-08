@@ -154,13 +154,18 @@ STT allows you to speak to the model if you have a microphone
 STT can be enabled in `settings.js` under the section that looks like this:
 ```javascript
     "stt_transcription": true, // Change this to "true" to enable STT
+    "stt_provider": "groq", // STT provider: "groq" or "pollinations"
     "stt_username": "SYSTEM",
     "stt_agent_name": ""
 ```
 
 The Text to Speech engine will begin listening on the system default input device. **Note:** Successful STT operation depends on the `naudiodon` package, which is an optional dependency. If `naudiodon` failed to install or build (see "Installation Prerequisites" for troubleshooting), STT will be disabled.
 
-When using STT, you **need** a [GroqCloud API key](https://console.groq.com/keys) as Groq is used for Audio transcription
+**STT Providers:**
+- **Groq**: You **need** a [GroqCloud API key](https://console.groq.com/keys) as Groq is used for Audio transcription
+- **Pollinations**: Free STT service, no API key required. Uses the `openai-audio` model via the Pollinations API
+
+To use Pollinations STT, simply set `"stt_provider": "pollinations"` in your settings.js file. This provides a free alternative to Groq for speech-to-text transcription.
 
 # Bot Profiles
 

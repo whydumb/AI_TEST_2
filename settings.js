@@ -53,6 +53,7 @@ const settings = {
 
     "speak": false, // enable text-to-speech
     "stt_transcription": false, // enable speech-to-text transcription
+    "stt_provider": "groq", // STT provider: "groq" (requires API key) or "pollinations" (free)
     "stt_username": "SERVER", // username for STT messages
     "stt_agent_name": "", // agent name for STT messages, if empty it will send the STT to all bots
     
