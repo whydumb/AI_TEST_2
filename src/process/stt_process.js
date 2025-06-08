@@ -1,5 +1,6 @@
 import settings from '../../settings.js';
 import { GroqCloudTTS } from '../models/groq.js';
+import { PollinationsSTT } from '../models/pollinations.js';
 import wav from 'wav';
 import fs from 'fs';
 import path from 'path';
@@ -92,6 +93,7 @@ const SAMPLE_RATE = 16000;
 const BIT_DEPTH = 16;
 const STT_USERNAME = settings.stt_username || "SERVER";
 const STT_AGENT_NAME = settings.stt_agent_name || "";
+const STT_PROVIDER = settings.stt_provider || "groq";
 
 // Guards to prevent multiple overlapping recordings
 let isRecording = false;
@@ -301,14 +303,22 @@ async function recordAndTranscribeOnce() {
           return;
         }
 
-        const groqTTS = new GroqCloudTTS();
-        const text = await groqTTS.transcribe(outFile, {
-          model: "distil-whisper-large-v3-en",
-          prompt: "",
-          response_format: "json",
-          language: "en",
-          temperature: 0.0
-        });
+        // Use the configured STT provider
+        let text;
+        if (STT_PROVIDER === "pollinations") {
+          const pollinationsSTT = new PollinationsSTT();
+          text = await pollinationsSTT.transcribe(outFile);
+        } else {
+          // Default to Groq
+          const groqTTS = new GroqCloudTTS();
+          text = await groqTTS.transcribe(outFile, {
+            model: "distil-whisper-large-v3-en",
+            prompt: "",
+            response_format: "json",
+            language: "en",
+            temperature: 0.0
+          });
+        }
 
         if (!text || !text.trim()) {
           cleanupAndResolve(null);
@@ -408,7 +418,7 @@ async function continuousLoop() {
     return;
   }
 
-  console.log("[STT] Speech-to-text active (Groq Whisper)");
+  console.log(`[STT] Speech-to-text active (${STT_PROVIDER === 'pollinations' ? 'Pollinations' : 'Groq Whisper'})`);
   let consecutiveErrors = 0;
   const maxConsecutiveErrors = 3;
 
@@ -457,6 +467,14 @@ export function initTTS() {
   }
 
   console.log("[STT] Initializing STT...");
+  console.log(`[STT] Using provider: ${STT_PROVIDER}`);
+  
+  // Validate provider choice
+  if (!["groq", "pollinations"].includes(STT_PROVIDER)) {
+    console.warn(`[STT] Unknown STT provider: ${STT_PROVIDER}. Defaulting to pollinations.`);
+    STT_PROVIDER = 'pollinations';
+  }
+  
   sttRunning = true;
   sttInitialized = true;
 

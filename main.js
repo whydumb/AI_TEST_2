@@ -5,7 +5,7 @@ import { hideBin } from 'yargs/helpers';
 import { createMindServer } from './src/server/mind_server.js';
 import { mainProxy } from './src/process/main_proxy.js';
 import { readFileSync } from 'fs';
-import { initTTS } from './src/process/tts_process.js';
+import { initTTS } from './src/process/stt_process.js';
 
 function parseArguments() {
     return yargs(hideBin(process.argv))
