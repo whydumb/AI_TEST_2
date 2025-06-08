@@ -11,6 +11,22 @@ Crafting minds for Minecraft with LLMs and [Mineflayer!](https://prismarinejs.gi
 > [!Caution]
 Do not connect this bot to public servers with coding enabled. This project allows an LLM to write/execute code on your computer. The code is sandboxed, but still vulnerable to injection attacks. Code writing is disabled by default, you can enable it by setting `allow_insecure_coding` to `true` in `settings.js`. Ye be warned.
 
+# Migrating PRs from the previous repo
+1. **Clone the fork** with the PR (`fork-A`).
+2. Add `mindcraft-ce` as a remote:
+
+```bash
+git remote add fork-b https://github.com/mindcraft-ce/mindcraft-ce.git
+```
+
+3. Push the branch to `mindcraft-ce:
+
+```bash
+git push mindcraft-ce your-branch-name
+```
+
+4. On GitHub, go to `mindcraft-ce`, switch to `your-branch-name`, and create a PR to the desired branch in `mindcraft-ce`.
+
 ## Requirements
 
 - [Minecraft Java Edition](https://www.minecraft.net/en-us/store/minecraft-java-bedrock-edition-pc) (up to v1.21.1, recommend v1.20.4)
