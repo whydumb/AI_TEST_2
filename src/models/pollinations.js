@@ -1,5 +1,7 @@
+import { getKey, hasKey } from '../utils/keys.js';
 import { strictFormat } from "../utils/text.js";
 import fs from 'fs';
+import { log, logVision } from '../../logger.js';
 
 export class Pollinations {
     // models: https://text.pollinations.ai/models
@@ -9,8 +11,40 @@ export class Pollinations {
         this.url = url || "https://text.pollinations.ai/openai";
     }
 
-    async sendRequest(turns, systemMessage) {
+    async sendRequest(turns, systemMessage, imageData = null, stop_seq = '***') {
         let messages = [{'role': 'system', 'content': systemMessage}].concat(turns);
+
+        if (imageData) {
+            const visionModels = ["openai", "openai-fast", "openai-large", "openai-roblox", "mistral", "unity", "mirexa", "searchgpt", "evil", "elixposearch", "phi", "sur", "bidara", "openai-audio"];
+            if (!visionModels.some(vm => this.model_name.includes(vm))) {
+                console.warn(`[pollinations] Warning: imageData provided for model ${this.model_name}, which is not explicitly a vision model. The image may be ignored or cause an error.`);
+            }
+
+            let lastUserMessageIndex = -1;
+            for (let i = messages.length - 1; i >= 0; i--) {
+                if (messages[i].role === 'user') {
+                    lastUserMessageIndex = i;
+                    break;
+                }
+            }
+
+            if (lastUserMessageIndex !== -1) {
+                const originalContent = messages[lastUserMessageIndex].content;
+                messages[lastUserMessageIndex].content = [
+                    { type: "text", text: originalContent },
+                    {
+                        type: "image_url",
+                        image_url: {
+                            url: `data:image/jpeg;base64,${imageData.toString('base64')}`
+                        }
+                    }
+                ];
+            } else {
+                // No user message to attach image to, log warning or prepend a new one?
+                // For now, log a warning. Prompter should ensure user message exists if imagePath is set.
+                console.warn('[pollinations] imageData provided, but no user message found to attach it to. Image not sent.');
+            }
+        }
 
         const payload = {
             model: this.model_name || "openai-large",
@@ -20,15 +54,21 @@ export class Pollinations {
             ...(this.params || {})
         };
 
+        const headers = {
+            "Content-Type": "application/json"
+        }
+
+        if (hasKey("POLLINATIONS_API_KEY")) {
+            headers["Authorization"] = `Bearer ${getKey("POLLINATIONS_API_KEY")}`;
+        }
+
         let res = null;
 
         try {
             console.log(`Awaiting pollinations response from model`, this.model_name);
             const response = await fetch(this.url, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: headers,
                 body: JSON.stringify(payload)
             });
             if (!response.ok) {
@@ -42,6 +82,26 @@ export class Pollinations {
             console.error(`Failed to receive response.`, err || err.message);
             res = "My brain disconnected, try again.";
         }
+
+        if (imageData) {
+            const conversationForLogVision = [{ role: "system", content: systemMessage }].concat(turns);
+            let visionPromptText = "";
+            if (turns.length > 0) {
+                const lastTurn = turns[turns.length - 1];
+                if (lastTurn.role === 'user') {
+                    if (typeof lastTurn.content === 'string') {
+                        visionPromptText = lastTurn.content;
+                    } else if (Array.isArray(lastTurn.content)) {
+                        const textPart = lastTurn.content.find(part => part.type === 'text');
+                        if (textPart) visionPromptText = textPart.text;
+                    }
+                }
+            }
+            logVision(conversationForLogVision, imageData, res, visionPromptText);
+        } else {
+            log(JSON.stringify([{ role: "system", content: systemMessage }].concat(turns)), res);
+        }
+
         return res;
     }
 
@@ -60,7 +120,11 @@ export class Pollinations {
             ]
         });
 
-        return this.sendRequest(imageMessages, systemMessage)
+        const res = this.sendRequest(imageMessages, systemMessage);
+        if (imageBuffer && res) {
+            logVision([{ role: "system", content: systemMessage }].concat(messages), imageBuffer, res, systemMessage);
+        }
+        return res;
     }
 }
 
@@ -87,12 +151,18 @@ export async function sendAudioRequest(text, model, voice, url) {
 
     let audioData = null;
 
+    const headers = {
+        "Content-Type": "application/json"
+    }
+
+    if (hasKey("POLLINATIONS_API_KEY")) {
+        headers["Authorization"] = `Bearer ${getKey("POLLINATIONS_API_KEY")}`;
+    }
+
     try {
         const response = await fetch(url, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: headers,
             body: JSON.stringify(payload)
         })
 
@@ -143,12 +213,18 @@ export async function sendSTTRequest(audioFilePath, url) {
             ]
         };
 
+        const headers = {
+            "Content-Type": "application/json"
+        }
+
+        if (hasKey("POLLINATIONS_API_KEY")) {
+            headers["Authorization"] = `Bearer ${getKey("POLLINATIONS_API_KEY")}`;
+        }
+
         console.log(`Awaiting Pollinations STT response...`);
         const response = await fetch(url || "https://text.pollinations.ai/openai", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: headers,
             body: JSON.stringify(payload)
         });
 
