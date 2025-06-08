@@ -1,4 +1,7 @@
-# Mindcraft 🧠⛏️
+# Mindcraft Community Edition 🧠⛏️
+
+>[!Note]
+> This fork of mindcraft is maintained by the community, and has extra features not present in the official repo.
 
 Crafting minds for Minecraft with LLMs and [Mineflayer!](https://prismarinejs.github.io/mineflayer/#/)
 
