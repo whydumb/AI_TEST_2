@@ -65,10 +65,10 @@ $s.Speak('${txt.replace(/'/g,"''")}'); $s.Dispose()"`
           $p.Play();
           Start-Sleep -Seconds [math]::Ceiling($p.NaturalDuration.TimeSpan.TotalSeconds);
         `;
-        spawn('powershell', ['-NoProfile','-Command', ps], {
+        const psProcess = spawn('powershell', ['-NoProfile','-Command', ps], {
           stdio: 'ignore', detached: true
-        }).unref();
-        processQueue();
+        });
+        psProcess.on('exit', processQueue);
 
       } else {
         const player = spawn('ffplay', ['-nodisp','-autoexit','pipe:0'], {
