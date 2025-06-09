@@ -28,5 +28,3 @@ tasks/construction_tasks/train/**
 server_data*
 **/.DS_Store
 settings.js
-
-settings.js
