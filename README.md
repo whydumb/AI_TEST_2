@@ -3,12 +3,21 @@
 >[!Note]
 > This fork of mindcraft is maintained by the community, and has extra features not present in the official repo.
 
-## Extra community-added features
+## Community-added features
 
 - Pollinations.ai provider support for use without a key.
 - TTS and STT support for natural, voice conversations with the bot.
 - mineflayer version is 4.29.0, which includes more patches and features
 - More coming soon!
+
+<details>
+  <summary>More features...</summary>
+  <!-- Should we just put all of the "overspill" features here? -->
+
+  -  Andy-4 is the default Ollama model
+  -  Always Active Vision
+  -  Dataset collection for Fine-tuning models.
+</details>
 
 Crafting minds for Minecraft with LLMs and [Mineflayer!](https://prismarinejs.github.io/mineflayer/#/)
 
@@ -54,7 +63,7 @@ git push mindcraft-ce your-branch-name
 
 ## Install and Run
 
-1. Make sure you have the requirements above. If you plan to use the STT (Speech-to-Text) feature, also review the "Installation Prerequisites" section regarding `naudiodon`.
+1. Make sure you have the requirements above. <!-- Removed since `Mic` is the default for STT now, just added naudiodon in case Mic bugs out, since it has before.If you plan to use the STT (Speech-to-Text) feature, also review the "Installation Prerequisites" section regarding `naudiodon`. -->
 
 2. Clone or download this repository (big green button)
 
@@ -162,7 +171,7 @@ To connect to an unsupported minecraft version, you can try to use [viaproxy](se
 
 ## STT in Mindcraft
 
-STT allows you to speak to the model if you have a microphone
+STT allows you to speak to the model if you have a microphone.
 
 STT can be enabled in `settings.js` under the section that looks like this:
 ```javascript
@@ -172,7 +181,9 @@ STT can be enabled in `settings.js` under the section that looks like this:
     "stt_agent_name": ""
 ```
 
-The Text to Speech engine will begin listening on the system default input device. **Note:** Successful STT operation depends on the `naudiodon` package, which is an optional dependency. If `naudiodon` failed to install or build (see "Installation Prerequisites" for troubleshooting), STT will be disabled.
+The Text to Speech engine will begin listening on the system default input device.
+
+If for some reason STT does not work, install naudiodon by running the command: `npm install naudiodon`
 
 **STT Providers:**
 - **Groq**: You **need** a [GroqCloud API key](https://console.groq.com/keys) as Groq is used for Audio transcription
