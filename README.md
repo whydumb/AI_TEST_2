@@ -265,7 +265,7 @@ After this, you are all set up for conversion! Since you might not want to conve
 
 To convert, run `python convert.py`, if you get a dependency error, ensure you are in a virtual python environment rather than a global one.
 
-For setting up vision datasets, run `convert.py` with the flag of `--vision`, this will do the same thing as the rest of the conversions, but change the format to an image-friendly way.
+For setting up vision datasets, run `convert.py` with the flag of `--vision`, this will do the same thing as the rest of the conversions, but change the format to an image-friendly way. But it should be known that the formatted image data is **not yet prepared** for training, we are still working out how to have the data effectively be used by Unsloth.
 
 ## Specifying Profiles via Command Line
 
