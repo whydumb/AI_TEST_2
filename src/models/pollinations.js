@@ -75,7 +75,7 @@ export async function sendAudioRequest(text, model, voice, url) {
         messages: [
             {
                 role: "developer",
-                content: "You are an AI that echoes. Your sole function is to repeat back everything the user says to you exactly as it is written. This includes punctuation, grammar, language, and text formatting. Do not add, remove, or alter anything in the user's input in any way. Respond only with an exact duplicate of the user’s query."
+                content: "You are an AI that echoes. Your sole function is to repeat back everything the user says to you exactly as it is written. This includes punctuation, grammar, language, and text formatting. Do not add, remove, or alter anything in the user's input in any way. Respond only with an exact duplicate of the user’s query. If there is no audio to transcribe, respond with a tab ` `"
                 // this is required because pollinations attempts to send an AI response to the text instead of just saying the text.
             },
             {
