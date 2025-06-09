@@ -1,24 +1,20 @@
 # Mindcraft Community Edition 🧠⛏️
 
->[!Note]
-> This fork of mindcraft is maintained by the community, and has extra features not present in the official repo.
+> [!Note]
+> This fork of Mindcraft is maintained by the community and includes features not present in the official repo.
 
-## Extra community-added features
+## Community-Added Features
 
 - Pollinations.ai provider support for use without a key.
 - TTS and STT support for natural, voice conversations with the bot.
-- mineflayer version is 4.29.0, which includes more patches and features
+- Mineflayer version is 4.29.0 (includes more patches and features).
+- Andy-4 is the default Ollama model.
+- Always Active Vision.
+- Dataset collection for fine-tuning models.
 - More coming soon!
 
-Crafting minds for Minecraft with LLMs and [Mineflayer!](https://prismarinejs.github.io/mineflayer/#/)
+## Migrating PRs from the Original Repo
 
-[FAQ](https://github.com/kolbytn/mindcraft/blob/main/FAQ.md) | [Discord Support](https://discord.gg/mp73p35dzC) | [Video Tutorial](https://www.youtube.com/watch?v=gRotoL8P8D8) | [Blog Post](https://kolbynottingham.com/mindcraft/) | [Contributor TODO](https://github.com/users/kolbytn/projects/1) | [Paper Website](https://mindcraft-minecollab.github.io/index.html) | [MineCollab](https://github.com/kolbytn/mindcraft/blob/main/minecollab.md) 
-
-> [!Caution]
-Do not connect this bot to public servers with coding enabled. This project allows an LLM to write/execute code on your computer. The code is sandboxed, but still vulnerable to injection attacks. Code writing is disabled by default, you can enable it by setting `allow_insecure_coding` to `true` in `settings.js`. Ye be warned.
-
-<details>
-  <summary>Migrating PRs from the previous repo</summary>
 1. **Clone the fork** with the PR (`fork-A`).
 2. Add `mindcraft-ce` as a remote:
 
@@ -34,13 +30,26 @@ git push mindcraft-ce your-branch-name
 
 4. On GitHub, go to `mindcraft-ce`, switch to `your-branch-name`, and create a PR to the desired branch in `mindcraft-ce`.
 
-</details>
+---
+
+Crafting minds for Minecraft with LLMs and [Mineflayer!](https://prismarinejs.github.io/mineflayer/#/)
+
+[FAQ](https://github.com/kolbytn/mindcraft/blob/main/FAQ.md) |
+[Discord Support](https://discord.gg/mp73p35dzC) |
+[Video Tutorial](https://www.youtube.com/watch?v=gRotoL8P8D8) |
+[Blog Post](https://kolbynottingham.com/mindcraft/) |
+[Contributor TODO](https://github.com/users/kolbytn/projects/1) |
+[Paper Website](https://mindcraft-minecollab.github.io/index.html) |
+[MineCollab](https://github.com/kolbytn/mindcraft/blob/main/minecollab.md)
+
+> [!Caution]
+> Do not connect this bot to public servers with coding enabled. This project allows an LLM to write/execute code on your computer. The code is sandboxed, but still vulnerable to injection attacks. Code writing is disabled by default. You can enable it by setting <code>allow_insecure_coding</code> to <code>true</code> in <code>settings.js</code>. Ye be warned.
 
 ## Requirements
 
 - [Minecraft Java Edition](https://www.minecraft.net/en-us/store/minecraft-java-bedrock-edition-pc) (up to v1.21.1, recommend v1.20.4)
 - [Node.js Installed](https://nodejs.org/) (at least v14)
-- One of these:
+- One of these (optional, you can also use pollinations.ai without any key):
   - [OpenAI API Key](https://openai.com/blog/openai-api)
   - [Gemini API Key](https://aistudio.google.com/app/apikey)
   - [Anthropic API Key](https://docs.anthropic.com/claude/docs/getting-access-to-claude)
@@ -54,11 +63,11 @@ git push mindcraft-ce your-branch-name
 
 ## Install and Run
 
-1. Make sure you have the requirements above. If you plan to use the STT (Speech-to-Text) feature, also review the "Installation Prerequisites" section regarding `naudiodon`.
+1. Make sure you have the requirements above. <!-- Removed since `Mic` is the default for STT now, just added naudiodon in case Mic bugs out, since it has before.If you plan to use the STT (Speech-to-Text) feature, also review the "Installation Prerequisites" section regarding `naudiodon`. -->
 
 2. Clone or download this repository (big green button)
 
-3. Rename `keys.example.json` to `keys.json` and fill in your API keys (you only need one). The desired model is set in `andy.json` or other profiles. For other models refer to the table below.
+3.  [If you are using pollinations.ai, you can skip this step.] Rename `keys.example.json` to `keys.json` and fill in your API keys (you only need one). The desired model is set in `andy.json` or other profiles. For other models refer to the table below.
 
 4. In terminal/command prompt, run `npm install` from the installed directory. (Note: If `naudiodon` fails to build and you don't need STT, you can usually proceed.)
 
@@ -66,7 +75,7 @@ git push mindcraft-ce your-branch-name
 
 6. Run `node main.js` from the installed directory
 
-If you encounter issues, check the [FAQ](https://github.com/kolbytn/mindcraft/blob/main/FAQ.md) or find support on [discord](https://discord.gg/mp73p35dzC). We are currently not very responsive to github issues.
+If you encounter issues, check the [FAQ](https://github.com/mindcraft-ce/mindcraft-ce/blob/main/FAQ.md) or find support on [discord](https://discord.gg/mp73p35dzC). We are currently responsive to github issues.
 
 ## Tasks
 
@@ -129,15 +138,16 @@ If you use Ollama, to install the models used by default (generation and embeddi
 To connect to online servers your bot will need an official Microsoft/Minecraft account. You can use your own personal one, but will need another account if you want to connect too and play with it. To connect, change these lines in `settings.js`:
 ```javascript
 "host": "111.222.333.444",
-"port": 55920,
+"port": 25565,
 "auth": "microsoft",
 
 // rest is same...
 ```
 > [!Important]
 > The bot's name in the profile.json must exactly match the Minecraft profile name! Otherwise the bot will spam talk to itself.
+> Example: If you are signing in with a Microsoft account, with the username "Player01", then you need to set the name in profile to "Player01".
 
-To use different accounts, Mindcraft will connect with the account that the Minecraft launcher is currently using. You can switch accounts in the launcer, then run `node main.js`, then switch to your main account after the bot has connected.
+When using a Microsoft account for mindcraft, it will show a link and a code. Open the link in the browser, sign in with the Microsoft account you wish for the bot to use, and follow the on-screen instructions.
 
 ### Docker Container
 
@@ -161,7 +171,7 @@ To connect to an unsupported minecraft version, you can try to use [viaproxy](se
 
 ## STT in Mindcraft
 
-STT allows you to speak to the model if you have a microphone
+STT allows you to speak to the model if you have a microphone.
 
 STT can be enabled in `settings.js` under the section that looks like this:
 ```javascript
@@ -171,13 +181,16 @@ STT can be enabled in `settings.js` under the section that looks like this:
     "stt_agent_name": ""
 ```
 
-The Text to Speech engine will begin listening on the system default input device. **Note:** Successful STT operation depends on the `naudiodon` package, which is an optional dependency. If `naudiodon` failed to install or build (see "Installation Prerequisites" for troubleshooting), STT will be disabled.
+The Text to Speech engine will begin listening on the system default input device.
+
+If for some reason STT does not work, install naudiodon by running the command: `npm install naudiodon`
 
 **STT Providers:**
 - **Groq**: You **need** a [GroqCloud API key](https://console.groq.com/keys) as Groq is used for Audio transcription
 - **Pollinations**: Free STT service, no API key required. Uses the `openai-audio` model via the Pollinations API
 
-To use Pollinations STT, simply set `"stt_provider": "pollinations"` in your settings.js file. This provides a free alternative to Groq for speech-to-text transcription.
+To use Groq STT, simply set `"stt_provider": "groq"` in your settings.js file. This provides an alternative to pollinations for speech-to-text transcription.
+<!-- UPDATED BECAUSE POLLINATIONS IS NOW DEFAULT -->
 
 # Bot Profiles
 
