@@ -50,6 +50,7 @@
 | **Extensibility** | None | **Plugin System** |
 | **Dataset Tools** | No | **Yes**, built-in tools for data collection |
 | **Dependencies** | Older | **Updated** (e.g., Mineflayer 4.29.0) |
+| **Error Handling** | Shows technical error message, difficult to troubleshoot | **Includes suggested fix** for easy fixing |
 
 > [!Caution]
 > Do not connect this bot to public servers with coding enabled. This project allows an LLM to write/execute code on your computer. The code is sandboxed, but still vulnerable to injection attacks. Code writing is disabled by default. You can enable it by setting <code>allow_insecure_coding</code> to <code>true</code> in <code>settings.js</code>. Ye be warned.
