@@ -50,16 +50,11 @@ const argv = yargs(args)
         description: 'identifying count for multi-agent scenarios',
     }).argv;
 
-// Wrap agent start in async IIFE with proper error handling
+// Wrap agent start in async IIFE
 (async () => {
-    try {
-        console.log('Starting agent with profile:', argv.profile);
-        const agent = new Agent();
-        await agent.start(argv.profile, argv.load_memory, argv.init_message, argv.count_id, argv.task_path, argv.task_id);
-    } catch (error) {
-        console.error('Failed to start agent process:');
-        console.error(error.message);
-        console.error(error.stack);
-        process.exit(1);
-    }
+    console.log('Starting agent with profile:', argv.profile);
+    const agent = new Agent();
+    await agent.start(argv.profile, argv.load_memory, argv.init_message, argv.count_id, argv.task_path, argv.task_id);
+
+    // removed error handling so that `main.js` can catch it and debug
 })();

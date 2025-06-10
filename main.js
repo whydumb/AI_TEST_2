@@ -56,5 +56,23 @@ try {
     main();
 } catch (error) {
     console.error('An error occurred:', error);
+
+    let suggestedFix = "Not sure. Try asking on Discord, or filing a GitHub issue.";
+
+    if ("ECONNREFUSED" in error) {
+        suggestedFix = `Ensure your game is Open to LAN on port ${settings.port}, and you're playing version ${settings.minecraft_version}. If you're using a different version, change it in settings.js!`
+    } else if ("ERR_MODULE_NOT_FOUND" in error) {
+        suggestedFix = "Run `npm install`."
+    } else if ("ECONNRESET" in error) {
+        suggestedFix = `Make sure that you're playing version ${settings.minecraft_version}. If you're using a different version, change it in settings.js!`
+    } else if ("ERR_DLOPEN_FAILED" in error) {
+        suggestedFix = "Delete the `node_modules` folder, and run `npm install` again."
+    } else if ("Cannot read properties of null (reading 'version')" in error) {
+        suggestedFix = "Try again, with a vanilla Minecraft client - mindcraft-ce doesn't support mods!"
+    } else if ("not found in keys.json" in error) {
+        suggestedFix = "Ensure to rename `keys.example.json` to `keys.json`, and fill in the necessary API key."
+    }
+
+    console.log("\n\n✨ Suggested Fix: " + suggestedFix)
     process.exit(1);
 }
