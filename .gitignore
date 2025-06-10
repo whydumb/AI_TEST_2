@@ -27,6 +27,7 @@ tasks/construction_tasks/test/**
 tasks/construction_tasks/train/**
 server_data*
 **/.DS_Store
+._*
 
 # (to @Sweaterdog) DO NOT ignore `settings.js` as it is a required file for the repo to function.
 # If `settings.js` is put in the `.gitignore` file, changes made to do things like add new features - e.g. adding a new key to the file

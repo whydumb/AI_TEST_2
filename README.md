@@ -134,6 +134,10 @@ If you use Ollama, to install the models used by default (generation and embeddi
   If you have any Issues, join the Mindcraft server, and ping `@Sweaterdog` with your issue, or leave an issue on the [Andy-4 huggingface repo](https://huggingface.co/Sweaterdog/Andy-4/discussions/new)
 </details>
 
+## Plugins
+
+mindcraft-ce has support for custom plugins! For instructions, check out [the plugin documentation](/src/plugins/README.md).
+
 ### Online Servers
 To connect to online servers your bot will need an official Microsoft/Minecraft account. You can use your own personal one, but will need another account if you want to connect too and play with it. To connect, change these lines in `settings.js`:
 ```javascript

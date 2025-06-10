@@ -9,6 +9,7 @@ import { initModes } from './modes.js';
 import { initBot } from '../utils/mcdata.js';
 import { containsCommand, commandExists, executeCommand, truncCommandMessage, isAction, blacklistCommands } from './commands/index.js';
 import { ActionManager } from './action_manager.js';
+import { PluginManager } from './plugin.js';
 import { NPCContoller } from './npc/controller.js';
 import { MemoryBank } from './memory_bank.js';
 import { SelfPrompter } from './self_prompter.js';
@@ -52,6 +53,8 @@ export class Agent {
         this.coder = new Coder(this);
         console.log('Initializing npc controller...');
         this.npc = new NPCContoller(this);
+        console.log('Initializing plugin manager...');
+        this.plugin = new PluginManager(this);
         console.log('Initializing memory bank...');
         this.memory_bank = new MemoryBank();
         console.log('Initializing self prompter...');
@@ -626,6 +629,10 @@ export class Agent {
             this.bot.modes.unPauseAll();
             this.actions.resumeAction();
         });
+
+
+        // Init plugin manager
+        this.plugin.init();
 
         // Init NPC controller
         this.npc.init();
