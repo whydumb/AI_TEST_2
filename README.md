@@ -36,9 +36,7 @@ Crafting minds for Minecraft with LLMs and [Mineflayer!](https://prismarinejs.gi
 
 [FAQ](https://github.com/kolbytn/mindcraft/blob/main/FAQ.md) |
 [Discord Support](https://discord.gg/mp73p35dzC) |
-[Video Tutorial](https://www.youtube.com/watch?v=gRotoL8P8D8) |
 [Blog Post](https://kolbynottingham.com/mindcraft/) |
-[Contributor TODO](https://github.com/users/kolbytn/projects/1) |
 [Paper Website](https://mindcraft-minecollab.github.io/index.html) |
 [MineCollab](https://github.com/kolbytn/mindcraft/blob/main/minecollab.md)
 
@@ -47,27 +45,40 @@ Crafting minds for Minecraft with LLMs and [Mineflayer!](https://prismarinejs.gi
 
 ## Requirements
 
-- [Minecraft Java Edition](https://www.minecraft.net/en-us/store/minecraft-java-bedrock-edition-pc) (up to v1.21.1, recommend v1.20.4)
-- [Node.js Installed](https://nodejs.org/) (at least v14)
-- One of these (optional, you can also use pollinations.ai without any key):
-  - [OpenAI API Key](https://openai.com/blog/openai-api)
-  - [Gemini API Key](https://aistudio.google.com/app/apikey)
-  - [Anthropic API Key](https://docs.anthropic.com/claude/docs/getting-access-to-claude)
-  - [Replicate API Key](https://replicate.com/)
-  - [Hugging Face API Key](https://huggingface.co/)
-  - [Groq API Key](https://console.groq.com/keys)
-  - [Ollama Installed](https://ollama.com/download)
-  - [Mistral API Key](https://docs.mistral.ai/getting-started/models/models_overview/)
-  - [Qwen API Key [Intl.]](https://www.alibabacloud.com/help/en/model-studio/developer-reference/get-api-key)/[[cn]](https://help.aliyun.com/zh/model-studio/getting-started/first-api-call-to-qwen?)
-  - [Novita AI API Key](https://novita.ai/settings?utm_source=github_mindcraft&utm_medium=github_readme&utm_campaign=link#key-management)
+- [Minecraft Java Edition](https://www.minecraft.net/en-us/store/minecraft-java-bedrock-edition-pc) (up to v1.21.4)
+- [node.js](https://nodejs.org/) (at least v18)
+- [git](https://git-scm.com/downloads/)
+  <details>
+    <summary>One of these (optional, you can also use pollinations.ai without any key):</summary>
+    <ul>
+      <li><a href="https://openai.com/blog/openai-api">OpenAI API Key</a></li>
+      <li><a href="https://aistudio.google.com/app/apikey">Gemini API Key</a></li>
+      <li><a href="https://docs.anthropic.com/claude/docs/getting-access-to-claude">Anthropic API Key</a></li>
+      <li><a href="https://replicate.com/">Replicate API Key</a></li>
+      <li><a href="https://huggingface.co/">Hugging Face API Key</a></li>
+      <li><a href="https://console.groq.com/keys">Groq API Key</a></li>
+      <li><a href="https://ollama.com/download">Ollama Installed</a></li>
+      <li><a href="https://docs.mistral.ai/getting-started/models/models_overview/">Mistral API Key</a></li>
+      <li><a href="https://www.alibabacloud.com/help/en/model-studio/developer-reference/get-api-key">Qwen API Key [Intl.]</a> / <a href="https://help.aliyun.com/zh/model-studio/getting-started/first-api-call-to-qwen?">[cn]</a></li>
+      <li><a href="https://novita.ai/settings?utm_source=github_mindcraft&utm_medium=github_readme&utm_campaign=link#key-management">Novita AI API Key</a></li>
+    </ul>
+  </details>
+
 
 ## Install and Run
 
+> [!Note]
+> An experimental Windows-only single-click installer + launcher, with extra features like a GUI editor for changing settings, is being worked on.
+
 1. Make sure you have the requirements above. <!-- Removed since `Mic` is the default for STT now, just added naudiodon in case Mic bugs out, since it has before.If you plan to use the STT (Speech-to-Text) feature, also review the "Installation Prerequisites" section regarding `naudiodon`. -->
 
-2. Clone or download this repository (big green button)
+2. Download this repository's [latest release](https://github.com/mindcraft-ce/mindcraft-ce/releases/latest). Unzip it to your Downloads folder.
 
-3.  [If you are using pollinations.ai, you can skip this step.] Rename `keys.example.json` to `keys.json` and fill in your API keys (you only need one). The desired model is set in `andy.json` or other profiles. For other models refer to the table below.
+> [!Note]
+> We recommend using pollinations.ai as it is the easiest to set up.
+> If you're using it, you can skip step 3 below.
+
+3. Rename `keys.example.json` to `keys.json` and fill in your API keys (you only need one). The desired model is set in `andy.json` or other profiles. For other models refer to the table below.
 
 4. In terminal/command prompt, run `npm install` from the installed directory. (Note: If `naudiodon` fails to build and you don't need STT, you can usually proceed.)
 
@@ -75,7 +86,7 @@ Crafting minds for Minecraft with LLMs and [Mineflayer!](https://prismarinejs.gi
 
 6. Run `node main.js` from the installed directory
 
-If you encounter issues, check the [FAQ](https://github.com/mindcraft-ce/mindcraft-ce/blob/main/FAQ.md) or find support on [discord](https://discord.gg/mp73p35dzC). We are currently responsive to github issues.
+If you encounter issues, check the [FAQ](https://github.com/mindcraft-ce/mindcraft-ce/blob/main/FAQ.md) or find support on [discord](https://discord.gg/mp73p35dzC). If that fails, you can [create an issue](https://github.com/mindcraft-ce/mindcraft-ce/issues/new).
 
 ## Tasks
 
