@@ -106,7 +106,7 @@ export class GroqCloudAPI {
     }
 }
 
-export class GroqCloudTTS {
+export class GroqCloudSTT {
   constructor() {
     this.groq = new Groq({ apiKey: getKey('GROQCLOUD_API_KEY') });
   }
