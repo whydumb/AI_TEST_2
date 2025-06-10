@@ -44,3 +44,5 @@ server_data*
 # git update-index --no-assume-unchanged settings.js
 
 # This will tell `git` to start tracking changes to `settings.js` again.
+
+# (To @uukelele-scratch) Thanks for the tips! it probably wont happen again 👍
