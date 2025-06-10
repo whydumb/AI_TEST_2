@@ -1,44 +1,55 @@
-# Mindcraft Community Edition 🧠⛏️
+<h1 align="center">mindcraft-ce</h1>
+<h3 align="center">
+  Mindcraft Community Edition 🧠⛏️
+</h3>
+<h4 align="center">
+  Maintained by 
+  <a href="https://github.com/uukelele-scratch">@uukelele-scratch</a>, 
+  <a href="https://github.com/sweaterdog">@Sweaterdog</a>, and 
+  <a href="https://github.com/riqvip">@riqvip</a>
+</h4>
+<p align="center">
+  <img alt="Static Badge" src="https://img.shields.io/badge/mindcraft-ce-badge">
+  <img alt="GitHub Release Date" src="https://img.shields.io/github/release-date/mindcraft-ce/mindcraft-ce">
+  <img alt="GitHub commits since latest release" src="https://img.shields.io/github/commits-since/mindcraft-ce/mindcraft-ce/latest">
+  <!--
+    uh we can make this visible when there are more downloads
+    <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/mindcraft-ce/mindcraft-ce/total">
+  -->
+  <img alt="GitHub repo size" src="https://img.shields.io/github/repo-size/mindcraft-ce/mindcraft-ce">
+
+
+</p>
+
+<p align="center">
+  Crafting minds for Minecraft with LLMs and <a href="https://prismarinejs.github.io/mineflayer/#/">mineflayer</a>!
+</p>
+
+<p align="center">
+  <a href="/FAQ.md">FAQ</a> |
+  <a href="https://discord.gg/mp73p35dzC">Discord Support</a> |
+  <a href="https://kolbynottingham.com/mindcraft/">Blog Post</a> |
+  <a href="https://mindcraft-minecollab.github.io/index.html">Paper Website</a> |
+  <a href="/minecollab.md">MineCollab</a>
+</p>
 
 > [!Note]
-> This fork of Mindcraft is maintained by the community and includes features not present in the official repo.
+> This fork of Mindcraft is maintained by the community and includes features not present in [the official repo](https://github.com/kolbytn/mindcraft).
 
-## Community-Added Features
-
-- Pollinations.ai provider support for use without a key.
-- TTS and STT support for natural, voice conversations with the bot.
-- Mineflayer version is 4.29.0 (includes more patches and features).
-- Andy-4 is the default Ollama model.
-- Always Active Vision.
-- Dataset collection for fine-tuning models.
-- More coming soon!
-
-## Migrating PRs from the Original Repo
-
-1. **Clone the fork** with the PR (`fork-A`).
-2. Add `mindcraft-ce` as a remote:
-
-```bash
-git remote add mindcraft-ce https://github.com/mindcraft-ce/mindcraft-ce.git
-```
-
-3. Push the branch to `mindcraft-ce`:
-
-```bash
-git push mindcraft-ce your-branch-name
-```
-
-4. On GitHub, go to `mindcraft-ce`, switch to `your-branch-name`, and create a PR to the desired branch in `mindcraft-ce`.
-
----
-
-Crafting minds for Minecraft with LLMs and [Mineflayer!](https://prismarinejs.github.io/mineflayer/#/)
-
-[FAQ](https://github.com/kolbytn/mindcraft/blob/main/FAQ.md) |
-[Discord Support](https://discord.gg/mp73p35dzC) |
-[Blog Post](https://kolbynottingham.com/mindcraft/) |
-[Paper Website](https://mindcraft-minecollab.github.io/index.html) |
-[MineCollab](https://github.com/kolbytn/mindcraft/blob/main/minecollab.md)
+<details>
+    <summary>Community-Added Features</summary>
+    <br>
+    <ul>
+      <li>pollinations.ai provider support for use without a key.</li>
+      <li>TTS and STT support for natural, voice conversations with the bot.</li>
+      <li><code>mineflayer</code> version is 4.29.0 (includes more patches and features).</li>
+      <li>Andy-4 is the default Ollama model.</li>
+      <li>Always Active Vision.</li>
+      <li>Dataset collection for fine-tuning models.</li>
+      <li>Plugin support for cool third-party add-ons!</li>
+      <li>More coming soon!</li>
+    </ul>
+</details>
 
 > [!Caution]
 > Do not connect this bot to public servers with coding enabled. This project allows an LLM to write/execute code on your computer. The code is sandboxed, but still vulnerable to injection attacks. Code writing is disabled by default. You can enable it by setting <code>allow_insecure_coding</code> to <code>true</code> in <code>settings.js</code>. Ye be warned.
@@ -86,17 +97,7 @@ Crafting minds for Minecraft with LLMs and [Mineflayer!](https://prismarinejs.gi
 
 6. Run `node main.js` from the installed directory
 
-If you encounter issues, check the [FAQ](https://github.com/mindcraft-ce/mindcraft-ce/blob/main/FAQ.md) or find support on [discord](https://discord.gg/mp73p35dzC). If that fails, you can [create an issue](https://github.com/mindcraft-ce/mindcraft-ce/issues/new).
-
-## Tasks
-
-Bot performance can be roughly evaluated with Tasks. Tasks automatically intialize bots with a goal to aquire specific items or construct predefined buildings, and remove the bot once the goal is achieved.
-
-To run tasks, you need python, pip, and optionally conda. You can then install dependencies with `pip install -r requirements.txt`. 
-
-Tasks are defined in json files in the `tasks` folder, and can be run with: `python tasks/run_task_file.py --task_path=tasks/example_tasks.json`
-
-For full evaluations, you will need to [download and install the task suite. Full instructions.](minecollab.md#installation)
+If you encounter issues, check the [FAQ](/FAQ.md) or find support on [discord](https://discord.gg/mp73p35dzC). If that fails, you can [create an issue](https://github.com/mindcraft-ce/mindcraft-ce/issues/new).
 
 ## Model Customization
 
@@ -145,69 +146,7 @@ If you use Ollama, to install the models used by default (generation and embeddi
   If you have any Issues, join the Mindcraft server, and ping `@Sweaterdog` with your issue, or leave an issue on the [Andy-4 huggingface repo](https://huggingface.co/Sweaterdog/Andy-4/discussions/new)
 </details>
 
-## Plugins
-
-mindcraft-ce has support for custom plugins! For instructions, check out [the plugin documentation](/src/plugins/README.md).
-
-### Online Servers
-To connect to online servers your bot will need an official Microsoft/Minecraft account. You can use your own personal one, but will need another account if you want to connect too and play with it. To connect, change these lines in `settings.js`:
-```javascript
-"host": "111.222.333.444",
-"port": 25565,
-"auth": "microsoft",
-
-// rest is same...
-```
-> [!Important]
-> The bot's name in the profile.json must exactly match the Minecraft profile name! Otherwise the bot will spam talk to itself.
-> Example: If you are signing in with a Microsoft account, with the username "Player01", then you need to set the name in profile to "Player01".
-
-When using a Microsoft account for mindcraft, it will show a link and a code. Open the link in the browser, sign in with the Microsoft account you wish for the bot to use, and follow the on-screen instructions.
-
-### Docker Container
-
-If you intend to `allow_insecure_coding`, it is a good idea to run the app in a docker container to reduce risks of running unknown code. This is strongly recommended before connecting to remote servers.
-
-```bash
-docker run -i -t --rm -v $(pwd):/app -w /app -p 3000-3003:3000-3003 node:latest node main.js
-```
-or simply
-```bash
-docker-compose up
-```
-
-When running in docker, if you want the bot to join your local minecraft server, you have to use a special host address `host.docker.internal` to call your localhost from inside your docker container. Put this into your [settings.js](settings.js):
-
-```javascript
-"host": "host.docker.internal", // instead of "localhost", to join your local minecraft from inside the docker container
-```
-
-To connect to an unsupported minecraft version, you can try to use [viaproxy](services/viaproxy/README.md)
-
-## STT in Mindcraft
-
-STT allows you to speak to the model if you have a microphone.
-
-STT can be enabled in `settings.js` under the section that looks like this:
-```javascript
-    "stt_transcription": true, // Change this to "true" to enable STT
-    "stt_provider": "groq", // STT provider: "groq" or "pollinations"
-    "stt_username": "SYSTEM",
-    "stt_agent_name": ""
-```
-
-The Text to Speech engine will begin listening on the system default input device.
-
-If for some reason STT does not work, install naudiodon by running the command: `npm install naudiodon`
-
-**STT Providers:**
-- **Groq**: You **need** a [GroqCloud API key](https://console.groq.com/keys) as Groq is used for Audio transcription
-- **Pollinations**: Free STT service, no API key required. Uses the `openai-audio` model via the Pollinations API
-
-To use Groq STT, simply set `"stt_provider": "groq"` in your settings.js file. This provides an alternative to pollinations for speech-to-text transcription.
-<!-- UPDATED BECAUSE POLLINATIONS IS NOW DEFAULT -->
-
-# Bot Profiles
+## Bot Profiles
 
 Bot profiles are json files (such as `andy.json`) that define:
 
@@ -266,6 +205,88 @@ Supported Embedding APIs: `openai`, `google`, `replicate`, `huggingface`, `novit
 
 If you try to use an unsupported model, then it will default to a simple word-overlap method. Expect reduced performance, recommend mixing APIs to ensure embedding support.
 
+
+## Plugins
+
+mindcraft-ce has support for custom plugins! For instructions, check out [the plugin documentation](/src/plugins/README.md).
+
+## Online Servers
+To connect to online servers your bot will need an official Microsoft/Minecraft account. You can use your own personal one, but will need another account if you want to connect too and play with it. To connect, change these lines in `settings.js`:
+```javascript
+"host": "111.222.333.444",
+"port": 25565,
+"auth": "microsoft",
+
+// rest is same...
+```
+> [!Important]
+> The bot's name in the profile.json must exactly match the Minecraft profile name! Otherwise the bot will spam talk to itself.
+> Example: If you are signing in with a Microsoft account, with the username "Player01", then you need to set the name in profile to "Player01".
+
+When using a Microsoft account for mindcraft, it will show a link and a code. Open the link in the browser, sign in with the Microsoft account you wish for the bot to use, and follow the on-screen instructions.
+
+## Migrating PRs from the Original Repo
+
+>[!warning]
+> These steps only work if you have write access to mindcraft-ce.
+
+1. **Clone the fork** with the PR (e.g. `mindcraft-fork`), if you haven't already.
+2. Add `mindcraft-ce` as a remote:
+
+```bash
+git remote add mindcraft-ce https://github.com/mindcraft-ce/mindcraft-ce.git
+```
+
+3. Push the branch to `mindcraft-ce`, replacing `patch-x` with your branch's name:
+```bash
+git push mindcraft-ce patch-x
+```
+
+4. On GitHub, go to `mindcraft-ce`, switch to `patch-x`, and create a PR to the desired branch in `mindcraft-ce`.
+
+## Docker Container
+
+If you intend to `allow_insecure_coding`, it is a good idea to run the app in a docker container to reduce risks of running unknown code. This is strongly recommended before connecting to remote servers.
+
+```bash
+docker run -i -t --rm -v $(pwd):/app -w /app -p 3000-3003:3000-3003 node:latest node main.js
+```
+or simply
+```bash
+docker-compose up
+```
+
+When running in docker, if you want the bot to join your local minecraft server, you have to use a special host address `host.docker.internal` to call your localhost from inside your docker container. Put this into your [settings.js](settings.js):
+
+```javascript
+"host": "host.docker.internal", // instead of "localhost", to join your local minecraft from inside the docker container
+```
+
+To connect to an unsupported minecraft version, you can try to use [viaproxy](services/viaproxy/README.md)
+
+## STT in Mindcraft
+
+STT allows you to speak to the model if you have a microphone.
+
+STT can be enabled in `settings.js` under the section that looks like this:
+```javascript
+    "stt_transcription": true, // Change this to "true" to enable STT
+    "stt_provider": "groq", // STT provider: "groq" or "pollinations"
+    "stt_username": "SYSTEM",
+    "stt_agent_name": ""
+```
+
+The Text to Speech engine will begin listening on the system default input device.
+
+If for some reason STT does not work, install naudiodon by running the command: `npm install naudiodon`
+
+**STT Providers:**
+- **Groq**: You **need** a [GroqCloud API key](https://console.groq.com/keys) as Groq is used for Audio transcription
+- **Pollinations**: Free STT service, no API key required. Uses the `openai-audio` model via the Pollinations API
+
+To use Groq STT, simply set `"stt_provider": "groq"` in your settings.js file. This provides an alternative to pollinations for speech-to-text transcription.
+<!-- UPDATED BECAUSE POLLINATIONS IS NOW DEFAULT -->
+
 ## Dataset collection
 
 Mindcraft has the capabilities to collect data from you playing with the bots, which can be used to generate training data to fine-tune models such as Andy-4. To do this, enable logging inside of `settings.js`, then navigate to the `logs` folder.
@@ -281,6 +302,16 @@ After this, you are all set up for conversion! Since you might not want to conve
 To convert, run `python convert.py`, if you get a dependency error, ensure you are in a virtual python environment rather than a global one.
 
 For setting up vision datasets, run `convert.py` with the flag of `--vision`, this will do the same thing as the rest of the conversions, but change the format to an image-friendly way. But it should be known that the formatted image data is **not yet prepared** for training, we are still working out how to have the data effectively be used by Unsloth.
+
+## Tasks
+
+Bot performance can be roughly evaluated with Tasks. Tasks automatically intialize bots with a goal to aquire specific items or construct predefined buildings, and remove the bot once the goal is achieved.
+
+To run tasks, you need python, pip, and optionally conda. You can then install dependencies with `pip install -r requirements.txt`. 
+
+Tasks are defined in json files in the `tasks` folder, and can be run with: `python tasks/run_task_file.py --task_path=tasks/example_tasks.json`
+
+For full evaluations, you will need to [download and install the task suite. Full instructions.](minecollab.md#installation)
 
 ## Specifying Profiles via Command Line
 
