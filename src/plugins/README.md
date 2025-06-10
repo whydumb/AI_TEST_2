@@ -8,7 +8,7 @@ In this tutorial, you’ll learn how to create a plugin and enable it in your ga
 
 ## Plugin Structure
 
-Each plugin should be placed in its own directory under `src/`. The directory name will be used as the plugin name. Inside the plugin folder, only a `main.js` file is required.
+Each plugin should be placed in its own directory under `src/plugins/`. The directory name will be used as the plugin name. Inside the plugin folder, only a `main.js` file is required.
 
 For example, the structure of a simple plugin called `Dance` looks like this:
 
@@ -45,7 +45,7 @@ Plugins are only loaded if explicitly listed in the `settings.plugins` array. If
 For example, to enable the `Dance` plugin, use:
 
 ```js
-plugins = ["Dance", ]
+"plugins": ["Dance"],
 ```
 
 ## Example Plugin: `Dance`
@@ -60,6 +60,7 @@ export class PluginInstance {
 
     init() {
         // Perform any setup here
+        // We can leave this empty for this simple plugin.
     }
 
     getPluginActions() {
