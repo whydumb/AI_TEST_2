@@ -36,20 +36,20 @@
 > [!Note]
 > This fork of Mindcraft is maintained by the community and includes features not present in [the official repo](https://github.com/kolbytn/mindcraft).
 
-<details>
-    <summary>Community-Added Features</summary>
-    <br>
-    <ul>
-      <li>pollinations.ai provider support for use without a key.</li>
-      <li>TTS and STT support for natural, voice conversations with the bot.</li>
-      <li><code>mineflayer</code> version is 4.29.0 (includes more patches and features).</li>
-      <li>Andy-4 is the default Ollama model.</li>
-      <li>Always Active Vision.</li>
-      <li>Dataset collection for fine-tuning models.</li>
-      <li>Plugin support for cool third-party add-ons!</li>
-      <li>More coming soon!</li>
-    </ul>
-</details>
+### mindcraft vs. mindcraft-ce
+
+| Feature | mindcraft (Original) | mindcraft-ce (Community Edition) |
+| --- | --- | --- |
+| **Development Status** | Inactive | **Active** |
+| **Minecraft Version** | Up to 1.21.1 | Up to **1.21.4** |
+| **Node.js Version** | v14+ | **v18+** (v22 recommended) |
+| **Default Ollama Model**| `llama3.1` | **`ollama/sweaterdog/andy-4`** (specialized model) |
+| **Free API Option** | No | **Yes** (`pollinations`) |
+| **Voice Interaction** | Basic Text-to-Speech (TTS) | Advanced TTS & **Speech-to-Text (STT)** |
+| **Vision Mode** | Simple on/off toggle | **Modes**: `off`, `prompted`, `always` |
+| **Extensibility** | None | **Plugin System** |
+| **Dataset Tools** | No | **Yes**, built-in tools for data collection |
+| **Dependencies** | Older | **Updated** (e.g., Mineflayer 4.29.0) |
 
 > [!Caution]
 > Do not connect this bot to public servers with coding enabled. This project allows an LLM to write/execute code on your computer. The code is sandboxed, but still vulnerable to injection attacks. Code writing is disabled by default. You can enable it by setting <code>allow_insecure_coding</code> to <code>true</code> in <code>settings.js</code>. Ye be warned.
