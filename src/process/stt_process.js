@@ -1,5 +1,5 @@
 import settings from '../../settings.js';
-import { GroqCloudTTS } from '../models/groq.js';
+import { GroqCloudSTT } from '../models/groq.js';
 import { PollinationsSTT } from '../models/pollinations.js';
 import wav from 'wav';
 import fs from 'fs';
@@ -63,8 +63,8 @@ let activeAudioLibrary = null; // 'naudiodon' or 'mic'
             activeAudioLibrary = null;
         }
     }
-    // Initialize TTS after attempting to load audio libraries
-    initTTS();
+    // Initialize STT after attempting to load audio libraries
+    initSTT();
 })();
 
 
@@ -310,8 +310,8 @@ async function recordAndTranscribeOnce() {
           text = await pollinationsSTT.transcribe(outFile);
         } else {
           // Default to Groq
-          const groqTTS = new GroqCloudTTS();
-          text = await groqTTS.transcribe(outFile, {
+          const groqSTT = new GroqCloudSTT();
+          text = await groqSTT.transcribe(outFile, {
             model: "distil-whisper-large-v3-en",
             prompt: "",
             response_format: "json",
@@ -448,7 +448,7 @@ async function continuousLoop() {
   }
 }
 
-export function initTTS() {
+export function initSTT() {
   if (!settings.stt_transcription) {
     console.log("[STT] STT transcription is disabled in settings.");
     sttRunning = false;
