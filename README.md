@@ -82,7 +82,7 @@
 
 > [!Note]
 > An experimental Windows-only single-click installer + launcher, with extra features like a GUI editor for changing settings, is being worked on.
-> Additionally, there is also another single-click installer + launcher available [here](https://github.com/freeload101/MSC_MINDcraft_Single_Click).
+> Additionally, there is also another single-click installer + launcher available [here](https://github.com/freeload101/MSC_MINDcraft_Single_Click). The single click installer auto-configures everything for you, and uses the optimal Andy-4 model based on your setup.
 
 1. Make sure you have the requirements above. <!-- Removed since `Mic` is the default for STT now, just added naudiodon in case Mic bugs out, since it has before.If you plan to use the STT (Speech-to-Text) feature, also review the "Installation Prerequisites" section regarding `naudiodon`. -->
 
