@@ -1373,9 +1373,11 @@ export async function goToPlayer(bot, username, targetDistance = 3) {
     const pathTimeout = bot.pathfinder.thinkTimeout || 10000;
 
     try {
+        console.log("Attempting a non-destructive route...")
         nonDestructivePath = await bot.pathfinder.getPathTo(nonDestructiveMovements, goal, pathTimeout);
     } catch {}
     try {
+        console.log("Attempting a destructive route...")
         destructivePath = await bot.pathfinder.getPathTo(destructiveMovements, goal, pathTimeout);
     } catch {}
 
@@ -1417,6 +1419,7 @@ export async function goToPlayer(bot, username, targetDistance = 3) {
         }
         const currentPosition = bot.entity.position.clone();
         const distanceToPlayer = playerEntity ? currentPosition.distanceTo(playerEntity.position) : Infinity;
+
         if (distanceToPlayer <= targetDistance) {
             log(bot, `Target distance reached (${distanceToPlayer.toFixed(2)}m). Stopping pathfinder.`);
             manuallyStoppedByProximity = true;
@@ -1425,23 +1428,34 @@ export async function goToPlayer(bot, username, targetDistance = 3) {
             if (stuckCheckInterval) clearInterval(stuckCheckInterval);
             return;
         }
+
         const distanceMoved = lastPosition.distanceTo(currentPosition);
         if (distanceMoved < 0.1) {
             stuckCounter++;
             if (stuckCounter >= 5 && !isPathfindingComplete && !bot.interrupt_code) {
-                log(bot, `Stuck for ${(stuckCounter * 0.2).toFixed(1)}s. Trying to open doors...`);
+                log(bot, `Stuck for ${(stuckCounter * 0.2).toFixed(1)}s. Trying to open doors or trapdoors...`);
                 const botPos = bot.entity.position;
                 const blocksToCheck = [
-                    bot.blockAt(botPos), bot.blockAt(botPos.offset(0, -1, 0)),
-                    bot.blockAt(botPos.offset(1, 0, 0)), bot.blockAt(botPos.offset(-1, 0, 0)),
-                    bot.blockAt(botPos.offset(0, 0, 1)), bot.blockAt(botPos.offset(0, 0, -1))
+                    bot.blockAt(botPos),
+                    bot.blockAt(botPos.offset(0, -1, 0)),
+                    bot.blockAt(botPos.offset(0, 1, 0)),
+                    bot.blockAt(botPos.offset(1, 0, 0)),
+                    bot.blockAt(botPos.offset(-1, 0, 0)),
+                    bot.blockAt(botPos.offset(0, 0, 1)),
+                    bot.blockAt(botPos.offset(0, 0, -1))
                 ];
                 for (const block of blocksToCheck) {
                     if (isPathfindingComplete || bot.interrupt_code) break;
-                    if (block && block.name && block.name.includes('door')) {
+                    if (
+                        block &&
+                        block.name &&
+                        (block.name.includes('door') ||
+                         block.name.includes('trapdoor') ||
+                         block.name.includes('fence_gate'))
+                    ) {
                         try {
                             await bot.activateBlock(block);
-                            log(bot, `Activated door at ${block.position}`);
+                            log(bot, `Activated ${block.name} at ${block.position}`);
                             stuckCounter = 0;
                             break;
                         } catch {}
@@ -1449,6 +1463,7 @@ export async function goToPlayer(bot, username, targetDistance = 3) {
                 }
             }
         } else stuckCounter = 0;
+
         lastPosition = currentPosition;
     };
 
