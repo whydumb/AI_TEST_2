@@ -1346,20 +1346,63 @@ export async function goToPlayer(bot, username, targetDistance = 3) {
         return false;
     }
 
-    const movements = new pf.Movements(bot);
-    movements.canOpenDoors = true;
-    movements.canFloat = true; 
-    movements.allowSprinting = true;
-    movements.allowParkour = true; 
-    movements.climbCost = 1; 
-    movements.jumpCost = 1; 
-    movements.allowFreeMotion = true;
-    movements.digCost = 100;
+    const nonDestructiveMovements = new pf.Movements(bot);
+    nonDestructiveMovements.canOpenDoors = true;
+    nonDestructiveMovements.canFloat = true;
+    nonDestructiveMovements.allowSprinting = true;
+    nonDestructiveMovements.allowParkour = true;
+    nonDestructiveMovements.climbCost = 1;
+    nonDestructiveMovements.jumpCost = 1;
+    nonDestructiveMovements.allowFreeMotion = true;
+    nonDestructiveMovements.digCost = 100;
 
-    bot.pathfinder.setMovements(movements);
-    
-    bot.pathfinder.thinkTimeout = 10000; 
-    bot.pathfinder.tickTimeout = 80;    
+    const destructiveMovements = new pf.Movements(bot);
+    destructiveMovements.canOpenDoors = true;
+    destructiveMovements.canFloat = true;
+    destructiveMovements.allowSprinting = true;
+    destructiveMovements.allowParkour = true;
+    destructiveMovements.climbCost = 1;
+    destructiveMovements.jumpCost = 1;
+    destructiveMovements.allowFreeMotion = true;
+    destructiveMovements.digCost = 1;
+
+    const goal = new pf.goals.GoalFollow(playerEntity, targetDistance);
+    let chosenMovements = null;
+    let nonDestructivePath = null;
+    let destructivePath = null;
+    const pathTimeout = bot.pathfinder.thinkTimeout || 10000;
+
+    try {
+        nonDestructivePath = await bot.pathfinder.getPathTo(nonDestructiveMovements, goal, pathTimeout);
+    } catch {}
+    try {
+        destructivePath = await bot.pathfinder.getPathTo(destructiveMovements, goal, pathTimeout);
+    } catch {}
+
+    if (
+        nonDestructivePath &&
+        nonDestructivePath.path &&
+        nonDestructivePath.path.length > 0 &&
+        nonDestructivePath.status !== 'noPath'
+    ) {
+        chosenMovements = nonDestructiveMovements;
+        log(bot, `Using non-destructive path to player ${username}.`);
+    } else if (
+        destructivePath &&
+        destructivePath.path &&
+        destructivePath.path.length > 0 &&
+        destructivePath.status !== 'noPath'
+    ) {
+        chosenMovements = destructiveMovements;
+        log(bot, `Using destructive path to player ${username}.`);
+    } else {
+        log(bot, `No path found to player ${username}.`);
+        return false;
+    }
+
+    bot.pathfinder.setMovements(chosenMovements);
+    bot.pathfinder.thinkTimeout = 10000;
+    bot.pathfinder.tickTimeout = 80;
 
     let lastPosition = bot.entity.position.clone();
     let stuckCounter = 0;
@@ -1369,108 +1412,64 @@ export async function goToPlayer(bot, username, targetDistance = 3) {
 
     const checkStuck = async () => {
         if (isPathfindingComplete || bot.interrupt_code) {
-            if (stuckCheckInterval) {
-                clearInterval(stuckCheckInterval);
-                stuckCheckInterval = null;
-            }
+            if (stuckCheckInterval) clearInterval(stuckCheckInterval);
             return;
         }
-        
         const currentPosition = bot.entity.position.clone();
-        const actualDistanceToPlayer = playerEntity ? currentPosition.distanceTo(playerEntity.position) : Infinity;
-
-        if (playerEntity && actualDistanceToPlayer <= targetDistance) {
-            log(bot, `Target distance (${targetDistance}m) reached (${actualDistanceToPlayer.toFixed(2)}m). Stopping pathfinder.`);
+        const distanceToPlayer = playerEntity ? currentPosition.distanceTo(playerEntity.position) : Infinity;
+        if (distanceToPlayer <= targetDistance) {
+            log(bot, `Target distance reached (${distanceToPlayer.toFixed(2)}m). Stopping pathfinder.`);
             manuallyStoppedByProximity = true;
-            bot.pathfinder.setGoal(null); // More robust way to stop and clear goal
-            isPathfindingComplete = true; // Signal that the process is concluding
-            if (stuckCheckInterval) {
-                clearInterval(stuckCheckInterval);
-                stuckCheckInterval = null;
-            }
-            return; 
+            bot.pathfinder.setGoal(null);
+            isPathfindingComplete = true;
+            if (stuckCheckInterval) clearInterval(stuckCheckInterval);
+            return;
         }
-        
-        // This block should only run if pathfinding is active and target not yet reached.
-        // isPathfindingComplete is false here.
         const distanceMoved = lastPosition.distanceTo(currentPosition);
-        if (distanceMoved < 0.1) { 
-            // console.log(`System thinks the bot is not moving right now, but it has moved ${distanceMoved} blocks`) // Debug
+        if (distanceMoved < 0.1) {
             stuckCounter++;
-            if (stuckCounter >= 5) { // Using 5 from your file (1 second)
-                // Check !isPathfindingComplete again, as it might have changed due to async operations
-                if (!isPathfindingComplete && !bot.interrupt_code) { 
-                    log(bot, `Bot appears stuck (not moving for ${(stuckCounter * 0.2).toFixed(1)}s, distToPlayer: ${actualDistanceToPlayer.toFixed(2)}), attempting to open nearby doors...`);
-                    
-                    const botPos = bot.entity.position;
-                    const blocksToCheck = [
-                        bot.blockAt(botPos), bot.blockAt(botPos.offset(0, -1, 0)),
-                        bot.blockAt(botPos.offset(1, 0, 0)), bot.blockAt(botPos.offset(-1, 0, 0)),
-                        bot.blockAt(botPos.offset(0, 0, 1)), bot.blockAt(botPos.offset(0, 0, -1))
-                    ];
-                    
-                    let doorActionTaken = false;
-                    for (const block of blocksToCheck) {
-                        if (isPathfindingComplete || bot.interrupt_code) break;
-                        if (block && block.name && block.name.includes('door')) {
-                            try {
-                                await bot.activateBlock(block);
-                                log(bot, `Activated door at ${block.position}`);
-                                doorActionTaken = true;
-                                await new Promise(resolve => setTimeout(resolve, 300)); // Wait for door to open
-                                stuckCounter = 0; 
-                                break; 
-                            } catch (err) { /* log error if needed */ }
-                        }
+            if (stuckCounter >= 5 && !isPathfindingComplete && !bot.interrupt_code) {
+                log(bot, `Stuck for ${(stuckCounter * 0.2).toFixed(1)}s. Trying to open doors...`);
+                const botPos = bot.entity.position;
+                const blocksToCheck = [
+                    bot.blockAt(botPos), bot.blockAt(botPos.offset(0, -1, 0)),
+                    bot.blockAt(botPos.offset(1, 0, 0)), bot.blockAt(botPos.offset(-1, 0, 0)),
+                    bot.blockAt(botPos.offset(0, 0, 1)), bot.blockAt(botPos.offset(0, 0, -1))
+                ];
+                for (const block of blocksToCheck) {
+                    if (isPathfindingComplete || bot.interrupt_code) break;
+                    if (block && block.name && block.name.includes('door')) {
+                        try {
+                            await bot.activateBlock(block);
+                            log(bot, `Activated door at ${block.position}`);
+                            stuckCounter = 0;
+                            break;
+                        } catch {}
                     }
-                    if (!doorActionTaken) stuckCounter = 0; // Reset if no door action was taken
-                } else {
-                     stuckCounter = 0; 
                 }
             }
-        } else { 
-            // console.log(`System thinks the bot is moving right now, moved ${distanceMoved} blocks`); // Debug
-            stuckCounter = 0; 
-        }
-        // console.log(`Bot has finished moving`) // Removed confusing log
+        } else stuckCounter = 0;
         lastPosition = currentPosition;
     };
 
     stuckCheckInterval = setInterval(checkStuck, 200);
 
-    const goal = new pf.goals.GoalFollow(playerEntity, targetDistance);
-    // console.log(`right before trying to go to the goal`) // Debug
     try {
         await bot.pathfinder.goto(goal);
-        isPathfindingComplete = true; 
-        log(bot, `Pathfinder.goto Succeeded. Navigated to player ${username} within ${targetDistance} blocks.`);
+        isPathfindingComplete = true;
+        log(bot, `Arrived near player ${username}.`);
         return true;
     } catch (err) {
-        isPathfindingComplete = true; 
+        isPathfindingComplete = true;
         if (manuallyStoppedByProximity) {
-            log(bot, `Pathfinding intentionally stopped as target distance to ${username} was met.`);
-            return true; // This is considered a success
+            log(bot, `Stopped as target distance to ${username} was met.`);
+            return true;
         }
-        // Check for common pathfinder interruption messages
-        const errMessage = err.message.toLowerCase();
-        if (errMessage.includes('interrupted') || errMessage.includes('stopped') || errMessage.includes('goal changed') || errMessage.includes('cancel') || bot.interrupt_code) {
-            log(bot, `Pathfinding to ${username} was interrupted or stopped: ${err.message}`);
-        } else {
-            // console.error(`Pathfinder error in goToPlayer for ${username}: ${err.message}`); // Debug
-            log(bot, `Error in goToPlayer for ${username}: ${err.message}`);
-        }
+        log(bot, `Error in goToPlayer for ${username}: ${err.message}`);
         return false;
     } finally {
-        // console.log(`goToPlayer for ${username} operation ended.`); // Rephrased debug log
-        isPathfindingComplete = true; // Ensure it's set
-        if (stuckCheckInterval) {
-            clearInterval(stuckCheckInterval);
-            stuckCheckInterval = null;
-        }
-        // Ensure the goal is cleared if pathfinder might still be holding onto it.
-        if (bot.pathfinder.goal) {
-            bot.pathfinder.setGoal(null);
-        }
+        if (stuckCheckInterval) clearInterval(stuckCheckInterval);
+        if (bot.pathfinder.goal) bot.pathfinder.setGoal(null);
     }
 }
 
