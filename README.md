@@ -43,7 +43,7 @@
 | **Development Status** | Inactive | **Active** |
 | **Minecraft Version** | Up to 1.21.1 | Up to **1.21.4** |
 | **Node.js Version** | v14+ | **v18+** (v22 recommended) |
-| **Default Ollama Model**| `llama3.1` | **`ollama/sweaterdog/andy-4`** (specialized model) |
+| **Default Ollama Model**| `llama3.1` (Generic) | **`Andy-4`** (Built for Minecraft) |
 | **Free API Option** | No | **Yes** (`pollinations`) |
 | **Voice Interaction** | Basic Text-to-Speech (TTS) | Advanced TTS & **Speech-to-Text (STT)** |
 | **Vision Mode** | Simple on/off toggle | **Modes**: `off`, `prompted`, `always` |
