@@ -49,7 +49,7 @@ diff --git a/node_modules/mineflayer-pathfinder/lib/movements.js b/node_modules/
 index a7e3505..3c4a8f2 100644
 --- a/node_modules/mineflayer-pathfinder/lib/movements.js
 +++ b/node_modules/mineflayer-pathfinder/lib/movements.js
-@@ -73,7 +73,13 @@
+@@ -62,7 +62,13 @@
  
      this.climbables = new Set()
      this.climbables.add(registry.blocksByName.ladder.id)
@@ -64,7 +64,7 @@ index a7e3505..3c4a8f2 100644
      this.emptyBlocks = new Set()
  
      this.replaceables = new Set()
-@@ -103,13 +109,15 @@
+@@ -92,13 +98,15 @@
        }
      })
      registry.blocksArray.forEach(block => {
@@ -82,7 +82,7 @@ index a7e3505..3c4a8f2 100644
  
      this.exclusionAreasStep = []
      this.exclusionAreasBreak = []
-@@ -254,9 +262,13 @@
+@@ -230,8 +238,13 @@
        }
      }
      b.climbable = this.climbables.has(b.type)
@@ -98,12 +98,10 @@ index a7e3505..3c4a8f2 100644
      b.replaceable = this.replaceables.has(b.type) && !b.physical
      b.liquid = this.liquids.has(b.type)
      b.height = pos.y + dy
-@@ -310,7 +322,19 @@
-     let cost = 0
+@@ -284,6 +297,18 @@
      cost += this.exclusionStep(block) // Is excluded so can't move or break
      cost += this.getNumEntitiesAt(block.position, 0, 0, 0) * this.entityCost
--    if (block.safe) return cost
-+    if (block.safe) return cost
+     if (block.safe) return cost
 +
 +    // process door cost
 +    if ((this.canOpenDoors && block.openable)
@@ -119,7 +117,7 @@ index a7e3505..3c4a8f2 100644
      if (!this.safeToBreak(block)) return 100 // Can't break, so can't move
      toBreak.push(block.position)
  
-@@ -433,8 +457,8 @@
+@@ -387,8 +412,8 @@
      cost += this.safeOrBreak(blockB, toBreak)
      if (cost > 100) return
  
@@ -130,10 +128,12 @@ index a7e3505..3c4a8f2 100644
        toPlace.push({ x: node.x + dir.x, y: node.y, z: node.z + dir.z, dx: 0, dy: 0, dz: 0, useOne: true }) // Indicate that a block should be used on this block not placed
      } else {
        cost += this.safeOrBreak(blockC, toBreak)
-@@ -588,6 +612,46 @@
-     neighbors.push(new Move(node.x, node.y + 1, node.z, node.remainingBlocks - toPlace.length, cost, toBreak, toPlace))
-   }
+@@ -552,6 +577,54 @@
+     if (cost > 100) return
  
+     neighbors.push(new Move(node.x, node.y + 1, node.z, node.remainingBlocks - toPlace.length, cost, toBreak, toPlace))
++  }
++
 +  getMoveClimbUpThroughTrapdoor (node, neighbors) {
 +    const blockCurrent = this.getBlock(node, 0, 0, 0) // Current position (should be climbable)
 +    const blockAbove = this.getBlock(node, 0, 1, 0) // Block directly above
@@ -180,12 +180,10 @@ index a7e3505..3c4a8f2 100644
 +    if (cost > 100) return
 +    
 +    neighbors.push(new Move(node.x, node.y + 2, node.z, node.remainingBlocks - toPlace.length, cost, toBreak, toPlace))
-+  }
-+
+   }
+ 
    // Jump up, down or forward over a 1 block gap
-   getMoveParkourForward (node, dir, neighbors) {
-     const block0 = this.getBlock(node, 0, -1, 0)
-@@ -682,6 +746,11 @@
+@@ -655,6 +728,10 @@
  
      this.getMoveDown(node, neighbors)
      this.getMoveUp(node, neighbors)
