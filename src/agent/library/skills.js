@@ -644,7 +644,7 @@ export async function placeBlock(bot, blockType, x, y, z, placeOn='bottom', dont
     if (item_name == "redstone_wire")
         item_name = "redstone";
     let block = bot.inventory.items().find(item => item.name === item_name);
-    if (block && bot.game.gameMode === 'creative' && !bot.restrict_to_inventory) {
+    if (!block && bot.game.gameMode === 'creative' && !bot.restrict_to_inventory) {
         await bot.creative.setInventorySlot(36, mc.makeItem(item_name, 1)); // 36 is first hotbar slot
         block = bot.inventory.items().find(item => item.name === item_name);
     }
