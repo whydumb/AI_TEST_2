@@ -148,7 +148,7 @@ export class Prompter {
                 profile.api = 'google';
             else if (profile.model.includes('vllm/'))
                 profile.api = 'vllm';
-            else if (profile.model.includes('gpt') || profile.model.includes('o1')|| profile.model.includes('o3'))
+            else if (profile.model.includes('gpt') || profile.model.includes('o1') || profile.model.includes('o3') || profile.model.includes('o4')) 
                 profile.api = 'openai';
             else if (profile.model.includes('claude'))
                 profile.api = 'anthropic';
