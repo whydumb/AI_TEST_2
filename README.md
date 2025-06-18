@@ -90,7 +90,7 @@
 2. Download this repository's [latest release](https://github.com/mindcraft-ce/mindcraft-ce/releases/latest). Unzip it to your Downloads folder.
 
 > [!Note]
-> We recommend using pollinations.ai as it is the easiest to set up.
+> We recommend using pollinations.ai as it is the easiest to set up. <!-- I would recommend Andy-4 personally 😒 -->
 > If you're using it, you can skip step 3 below.
 
 3. Rename `keys.example.json` to `keys.json` and fill in your API keys (you only need one). The desired model is set in `andy.json` or other profiles. For other models refer to the table below.
@@ -167,7 +167,7 @@ You can pass a string or an object for these fields. A model object must specify
 ```json
 "model": {
   "api": "openai",
-  "model": "gpt-4o",
+  "model": "gpt-4.1",
   "url": "https://api.openai.com/v1/",
   "params": {
     "max_tokens": 1000,
@@ -176,18 +176,18 @@ You can pass a string or an object for these fields. A model object must specify
 },
 "code_model": {
   "api": "openai",
-  "model": "gpt-4",
+  "model": "o4-mini",
   "url": "https://api.openai.com/v1/"
 },
 "vision_model": {
   "api": "openai",
-  "model": "gpt-4o",
+  "model": "gpt-4.1",
   "url": "https://api.openai.com/v1/"
 },
 "embedding": {
   "api": "openai",
   "url": "https://api.openai.com/v1/",
-  "model": "text-embedding-ada-002"
+  "model": "text-embedding-3-large"
 },
 "speak_model": {
   "api": "pollinations",
@@ -206,7 +206,7 @@ All apis have default models and urls, so those fields are optional. The `params
 
 Embedding models are used to embed and efficiently select relevant examples for conversation and coding.
 
-Supported Embedding APIs: `openai`, `google`, `replicate`, `huggingface`, `novita`
+Supported Embedding APIs: `openai`, `google`, `replicate`, `huggingface`, `novita`, `ollama`
 
 If you try to use an unsupported model, then it will default to a simple word-overlap method. Expect reduced performance, recommend mixing APIs to ensure embedding support.
 
@@ -287,9 +287,12 @@ If for some reason STT does not work, install naudiodon by running the command: 
 
 **STT Providers:**
 - **Groq**: You **need** a [GroqCloud API key](https://console.groq.com/keys) as Groq is used for Audio transcription
-- **Pollinations**: Free STT service, no API key required. Uses the `openai-audio` model via the Pollinations API
+- **Pollinations**: Free STT service, no API key required. Uses the `openai-audio` model via the Pollinations API. <!-- Why do we recommend this? I mean it is a TTS model, not a STT model... -->
 
 To use Groq STT, simply set `"stt_provider": "groq"` in your settings.js file. This provides an alternative to pollinations for speech-to-text transcription.
+> [!Note]
+> Pollinations can be buggy!
+> Using STT as `groq` is still free, and is far more stable and correct that pollinations.
 <!-- UPDATED BECAUSE POLLINATIONS IS NOW DEFAULT -->
 
 ## Dataset collection
