@@ -111,10 +111,10 @@ You can configure the agent's name, model, and prompts in their profile like `an
 
 | API | Config Variable | Example Model name | Docs |
 |------|------|------|------|
-| `openai` | `OPENAI_API_KEY` | `gpt-4o-mini` | [docs](https://platform.openai.com/docs/models) |
+| `openai` | `OPENAI_API_KEY` | `gpt-4.1-mini` | [docs](https://platform.openai.com/docs/models) |
 | `google` | `GEMINI_API_KEY` | `gemini-2.0-flash` | [docs](https://ai.google.dev/gemini-api/docs/models/gemini) |
-| `anthropic` | `ANTHROPIC_API_KEY` | `claude-3-haiku-20240307` | [docs](https://docs.anthropic.com/claude/docs/models-overview) |
-| `xai` | `XAI_API_KEY` | `grok-2-1212` | [docs](https://docs.x.ai/docs) |
+| `anthropic` | `ANTHROPIC_API_KEY` | `claude-3-5-haiku-20241022` | [docs](https://docs.anthropic.com/claude/docs/models-overview) |
+| `xai` | `XAI_API_KEY` | `grok-3-mini` | [docs](https://docs.x.ai/docs) |
 | `deepseek` | `DEEPSEEK_API_KEY` | `deepseek-chat` | [docs](https://api-docs.deepseek.com/) |
 | `ollama` (local) | n/a | `ollama/sweaterdog/andy-4` | [docs](https://ollama.com/library) |
 | `qwen` | `QWEN_API_KEY` | `qwen-max` | [Intl.](https://www.alibabacloud.com/help/en/model-studio/developer-reference/use-qwen-by-calling-api)/[cn](https://help.aliyun.com/zh/model-studio/getting-started/models) |
@@ -124,7 +124,7 @@ You can configure the agent's name, model, and prompts in their profile like `an
 | `groq` (not grok) | `GROQCLOUD_API_KEY` | `groq/mixtral-8x7b-32768` | [docs](https://console.groq.com/docs/models) |
 | `huggingface` | `HUGGINGFACE_API_KEY` | `huggingface/mistralai/Mistral-Nemo-Instruct-2407` | [docs](https://huggingface.co/models) |
 | `novita` | `NOVITA_API_KEY` | `novita/deepseek/deepseek-r1` | [docs](https://novita.ai/model-api/product/llm-api?utm_source=github_mindcraft&utm_medium=github_readme&utm_campaign=link) |
-| `openrouter` | `OPENROUTER_API_KEY` | `openrouter/anthropic/claude-3.5-sonnet` | [docs](https://openrouter.ai/models) |
+| `openrouter` | `OPENROUTER_API_KEY` | `openrouter/anthropic/claude-sonnet-4` | [docs](https://openrouter.ai/models) |
 | `glhf.chat` | `GHLF_API_KEY` | `glhf/hf:meta-llama/Llama-3.1-405B-Instruct` | [docs](https://glhf.chat/user-settings/api) |
 | `hyperbolic` | `HYPERBOLIC_API_KEY` | `hyperbolic/deepseek-ai/DeepSeek-V3` | [docs](https://docs.hyperbolic.xyz/docs/getting-started) |
 | `pollinations` | n/a | `pollinations/openai-large` | [docs](https://github.com/pollinations/pollinations/blob/master/APIDOCS.md) |
