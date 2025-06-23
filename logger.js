@@ -407,7 +407,17 @@ export async function logVision(conversationHistory, imageBuffer, response, visi
         return;
     }
 
-    const trimmedResponse = response ? String(response).trim() : "";
+    let resolvedResponse = response;
+    if (response && typeof response.then === 'function') {
+        try {
+            resolvedResponse = await response;
+        } catch (error) {
+            console.error("[Logger] Error resolving response promise:", error);
+            resolvedResponse = "[Error resolving promise]"; // Fallback in case of rejection
+        }
+    }
+
+    const trimmedResponse = resolvedResponse ? String(resolvedResponse).trim() : "";
     
     if (!conversationHistory || conversationHistory.length === 0 || !trimmedResponse || !imageBuffer) {
         logCounts.skipped_empty++;
