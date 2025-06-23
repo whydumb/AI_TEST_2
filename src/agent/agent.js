@@ -20,6 +20,7 @@ import settings from '../../settings.js';
 import { serverProxy } from './agent_proxy.js';
 import { Task } from './tasks/tasks.js';
 import { say } from './speak.js';
+import { sendUsernames } from '../../logger.js';
 
 export class Agent {
     async start(profile_fp, load_mem=false, init_message=null, count_id=0, task_path=null, task_id=null) {
@@ -106,6 +107,10 @@ export class Agent {
             try {
                 clearTimeout(spawnTimeout);
                 addBrowserViewer(this.bot, count_id);
+
+                if (settings.external_logging) {
+                    sendUsernames(this.bot);
+                }
 
                 // wait for a bit so stats are not undefined
                 await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -525,7 +530,7 @@ export class Agent {
         return used_command;
     }
 
-    async routeResponse(to_player, message) {
+    routeResponse(to_player, message) {
         if (this.shut_up) return;
         let self_prompt = to_player === 'system' || to_player === this.name;
         if (self_prompt && this.last_sender) {
@@ -610,7 +615,7 @@ export class Agent {
             console.warn('Bot kicked!', reason);
             this.cleanKill('Bot kicked! Killing agent process.');
         });
-        this.bot.on('messagestr', async (message, _, jsonMsg) => {
+        this.bot.on('messagestr', (message, _, jsonMsg) => {
             if (jsonMsg.translate && jsonMsg.translate.startsWith('death') && message.startsWith(this.name)) {
                 console.log('Agent died: ', message);
                 let death_pos = this.bot.entity.position;
