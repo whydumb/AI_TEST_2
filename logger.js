@@ -568,7 +568,11 @@ function initializeCounts() {
         console.log('\n' + '='.repeat(60));
         console.log('EXTERNAL LOGGING ENABLED');
         console.log('Data will be sent to mindcraft.riqvip.dev/api/log');
-        console.log('Please be aware of the data and privacy implications.');
+        console.log('The data will only be used to train future Andy models');
+        console.log('We only collect the messages you send to the agent');
+        console.log('And no other information.');
+        console.log('');
+        console.log('We recommend leaving this on to make Mindcraft-CE better!');
         console.log('='.repeat(60) + '\n');
         // Send usernames to the server is now handled by the agent
     }
