@@ -48,6 +48,13 @@ const settings = {
     "narrate_behavior": true, // chat simple automatic actions ('Picking up item!')
     "chat_bot_messages": true, // publicly chat messages to other bots
 
+    // Allows for truly autonomous playing
+    "auto_idle_trigger": {
+      "enabled": false,
+      "timeout_secs": 10, // 10 seconds inactivity before prompting
+      "message": "do something!"
+    },
+
     "speak": true,
     // allows all bots to speak through text-to-speech. format: {provider}/{model}/{voice}. if set to "system" it will use system text-to-speech, which works on windows and mac, but on linux you need to `apt install espeak`.
     // specify speech model inside each profile - so that you can have each bot with different voices ;)
