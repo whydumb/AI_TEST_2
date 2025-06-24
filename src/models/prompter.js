@@ -288,6 +288,12 @@ export class Prompter {
     }
 
     async replaceStrings(prompt, messages, examples=null, to_summarize=[], last_goals=null) {
+
+        // Personality has to go first since some of the personalities contain $NAME
+        if (prompt.includes('$PERSONALITY')) {
+            prompt = prompt.replaceAll('$PERSONALITY', this.current_personality || "Friendly and helpful, always eager to assist with various tasks.");
+        }
+
         prompt = prompt.replaceAll('$NAME', this.agent.name);
 
         if (prompt.includes('$STATS')) {
