@@ -344,14 +344,17 @@
 
         async function toggleModel(modelName) {
             try {
-                const response = await fetch('/api/toggle_model', {
+                // Use the RESTful endpoint consistent with models.html
+                const response = await fetch(`/api/models/${encodeURIComponent(modelName)}/toggle`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model_name: modelName })
+                    headers: { 'Content-Type': 'application/json' }
                 });
                 const result = await response.json();
                 if (!result.success) {
                     alert('Failed to toggle model');
+                } else {
+                    // Refresh the page to show the updated active models list
+                    location.reload();
                 }
             } catch (error) {
                 alert('Error toggling model: ' + error.message);
