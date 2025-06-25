@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Andy API Local Client - Fixed Version
+Andy API Local Client
 A web-based interface for hosting Ollama models and connecting to the Andy API pool
-This version uses the new simple polling approach with check_for_work endpoint.
 """
 
 import os
@@ -54,41 +53,39 @@ class ClientStats:
 class LocalClient:
     def __init__(self):
         self.config = self.load_config()
-        self.models: Dict[str, ModelConfig] = {}
         self.stats = ClientStats()
+        self.models: Dict[str, ModelConfig] = {}
         self.is_connected = False
-        self.host_id = None
-        self.running = False
+        self.host_id = None  # Store host_id for leave_pool calls
         self.connection_thread = None
         self.status_thread = None
         self.work_thread = None
-        
-        # Initialize database
+        self.running = True
         self.init_database()
         
-        # Discover models
-        self.discover_models()
-
     def load_config(self) -> dict:
         """Load configuration from file"""
         default_config = {
             'andy_api_url': DEFAULT_ANDY_API_URL,
             'ollama_url': DEFAULT_OLLAMA_URL,
+            'client_name': 'Local Andy Client',
+            'api_key': '',
             'auto_connect': False,
-            'max_vram_gb': 0,
-            'report_interval': 30
+            'report_interval': 30,
+            'max_vram_gb': 8
         }
         
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, 'r') as f:
                     config = json.load(f)
-                    return {**default_config, **config}
+                    # Merge with defaults
+                    default_config.update(config)
             except Exception as e:
                 logger.error(f"Error loading config: {e}")
         
         return default_config
-
+    
     def save_config(self):
         """Save configuration to file"""
         try:
@@ -96,60 +93,106 @@ class LocalClient:
                 json.dump(self.config, f, indent=2)
         except Exception as e:
             logger.error(f"Error saving config: {e}")
-
+    
     def init_database(self):
-        """Initialize SQLite database for logging"""
-        try:
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS requests (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    model_name TEXT,
-                    request_type TEXT,
-                    tokens INTEGER,
-                    response_time REAL,
-                    success BOOLEAN
-                )
-            ''')
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            logger.error(f"Database initialization error: {e}")
-
-    def discover_models(self):
-        """Discover available models from Ollama"""
+        """Initialize SQLite database for metrics"""
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                requests_per_minute INTEGER DEFAULT 0,
+                avg_response_time REAL DEFAULT 0.0,
+                tokens_per_second REAL DEFAULT 0.0,
+                queue_length INTEGER DEFAULT 0,
+                active_requests INTEGER DEFAULT 0,
+                vram_used_gb REAL DEFAULT 0.0
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS request_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                model_name TEXT,
+                request_type TEXT,
+                tokens INTEGER DEFAULT 0,
+                response_time REAL DEFAULT 0.0,
+                success BOOLEAN DEFAULT 1
+            )
+        ''')
+        
+        conn.commit()
+        conn.close()
+    
+    def discover_ollama_models(self) -> List[dict]:
+        """Discover available Ollama models"""
         try:
             response = requests.get(f"{self.config['ollama_url']}/api/tags", timeout=10)
             if response.status_code == 200:
                 data = response.json()
-                current_models = set(self.models.keys())
-                discovered_models = set()
-                
-                for model in data.get('models', []):
-                    model_name = model['name']
-                    discovered_models.add(model_name)
-                    
-                    if model_name not in self.models:
-                        self.models[model_name] = ModelConfig(
-                            name=model_name,
-                            enabled=False,
-                            context_length=model.get('context_length', 4096),
-                            quantization=model.get('quantization', 'unknown')
-                        )
-                
-                # Remove models that are no longer available
-                for model_name in current_models - discovered_models:
-                    if model_name in self.models:
-                        del self.models[model_name]
-                        
-                logger.info(f"Discovered {len(self.models)} models")
-            else:
-                logger.error(f"Failed to discover models: {response.status_code}")
+                return data.get('models', [])
         except Exception as e:
-            logger.error(f"Error discovering models: {e}")
-
+            logger.error(f"Error discovering Ollama models: {e}")
+        return []
+    
+    def detect_model_capabilities(self, model_name: str) -> ModelConfig:
+        """Detect model capabilities based on name and metadata"""
+        model_config = ModelConfig(name=model_name)
+        
+        # Basic capability detection based on model name
+        name_lower = model_name.lower()
+        
+        # Vision models
+        if any(vision_indicator in name_lower for vision_indicator in ['llava', 'vision', 'clip', 'moondream']):
+            model_config.supports_vision = True
+        
+        # Embedding models
+        if any(embed_indicator in name_lower for embed_indicator in ['embed', 'bge', 'e5', 'sentence']):
+            model_config.supports_embedding = True
+        
+        # Audio models (less common in Ollama but worth checking)
+        if any(audio_indicator in name_lower for audio_indicator in ['whisper', 'audio', 'speech']):
+            model_config.supports_audio = True
+        
+        # Try to get more detailed info from Ollama
+        try:
+            response = requests.post(
+                f"{self.config['ollama_url']}/api/show",
+                json={'name': model_name},
+                timeout=10
+            )
+            if response.status_code == 200:
+                model_info = response.json()
+                # Extract context length and other details
+                if 'model_info' in model_info:
+                    params = model_info['model_info']
+                    # This is model-specific and may need adjustment
+                    model_config.context_length = params.get('context_length', 4096)
+        except Exception as e:
+            logger.warning(f"Could not get detailed info for {model_name}: {e}")
+        
+        return model_config
+    
+    def refresh_models(self):
+        """Refresh the list of available models"""
+        discovered = self.discover_ollama_models()
+        new_models = {}
+        
+        for model_data in discovered:
+            model_name = model_data['name']
+            if model_name in self.models:
+                # Keep existing configuration
+                new_models[model_name] = self.models[model_name]
+            else:
+                # Detect capabilities for new models
+                new_models[model_name] = self.detect_model_capabilities(model_name)
+        
+        self.models = new_models
+        logger.info(f"Discovered {len(self.models)} models")
+    
     def connect_to_pool(self):
         """Connect to the Andy API pool"""
         try:
@@ -173,7 +216,6 @@ class LocalClient:
                 'capabilities': ['text'],  # Could be enhanced based on models
                 'vram_total_gb': self.config.get('max_vram_gb', 0),
                 'vram_used_gb': 0,  # Would need to implement actual VRAM monitoring
-                'gpu_compute_capability': 0,  # Could implement with GPU monitoring
                 'cpu_cores': 0,  # Could implement with psutil
                 'ram_total_gb': 0,  # Could implement with psutil
                 'ram_used_gb': 0,  # Could implement with psutil
@@ -199,7 +241,7 @@ class LocalClient:
             
         self.is_connected = False
         return False
-
+    
     def disconnect_from_pool(self):
         """Disconnect from the Andy API pool"""
         if not self.is_connected or not self.host_id:
@@ -226,7 +268,7 @@ class LocalClient:
         self.is_connected = False
         self.host_id = None
         return True
-
+    
     def report_status(self):
         """Report current status to the Andy API via ping_pool"""
         if not self.is_connected or not self.host_id:
@@ -257,51 +299,36 @@ class LocalClient:
                 
         except Exception as e:
             logger.error(f"Error pinging pool: {e}")
-
-    def start_background_threads(self):
-        """Start background threads for connection management and work polling"""
-        if self.running:
-            return
-            
-        self.running = True
+    
+    def start_background_tasks(self):
+        """Start background threads for connection and status reporting"""
+        if self.config.get('auto_connect', True):
+            self.connection_thread = threading.Thread(target=self._connection_loop, daemon=True)
+            self.connection_thread.start()
         
-        # Connection monitoring thread
-        self.connection_thread = threading.Thread(target=self._connection_loop, daemon=True)
-        self.connection_thread.start()
-        
-        # Status reporting thread
         self.status_thread = threading.Thread(target=self._status_loop, daemon=True)
         self.status_thread.start()
         
-        # Work polling thread - now uses simple polling
+        # Start work polling thread
         self.work_thread = threading.Thread(target=self._work_polling_loop, daemon=True)
         self.work_thread.start()
-        
-        logger.info("Background threads started")
-
-    def stop_background_threads(self):
-        """Stop background threads"""
-        self.running = False
-        logger.info("Background threads stopped")
-
+    
     def _connection_loop(self):
         """Background thread for maintaining connection"""
         while self.running:
-            if not self.is_connected and any(model.enabled for model in self.models.values()):
-                if self.config.get('auto_connect', False):
-                    logger.info("Attempting to reconnect to pool...")
-                    self.connect_to_pool()
+            if not self.is_connected:
+                self.connect_to_pool()
             time.sleep(60)  # Check connection every minute
-
+    
     def _status_loop(self):
         """Background thread for status reporting"""
         while self.running:
             if self.is_connected:
                 self.report_status()
             time.sleep(self.config.get('report_interval', 30))
-
+    
     def _work_polling_loop(self):
-        """Background thread for simple polling work requests"""
+        """Background thread for long-polling work requests"""
         while self.running:
             if self.is_connected and self.host_id:
                 try:
@@ -314,16 +341,17 @@ class LocalClient:
                         time.sleep(10)
                         continue
                     
-                    # Simple polling for work (non-blocking)
+                    # Poll for work
                     payload = {
                         "host_id": self.host_id,
-                        "models": enabled_models
+                        "models": enabled_models,
+                        "timeout": 30
                     }
                     
                     response = requests.post(
-                        f"{self.config['andy_api_url']}/api/andy/check_for_work",
+                        f"{self.config['andy_api_url']}/api/andy/poll_for_work",
                         json=payload,
-                        timeout=10  # Short timeout for simple polling
+                        timeout=35  # Slightly longer than poll timeout
                     )
                     
                     if response.status_code == 200:
@@ -347,17 +375,14 @@ class LocalClient:
                         time.sleep(5)
                         
                 except requests.exceptions.Timeout:
-                    logger.warning("Work polling timeout")
+                    # Timeout is expected for long polling
                     pass
                 except Exception as e:
                     logger.error(f"Work polling error: {e}")
                     time.sleep(5)
-                
-                # Simple polling interval - wait 3 seconds between checks
-                time.sleep(3)
             else:
                 time.sleep(5)
-
+    
     def process_work(self, work_id: str, work_data: dict):
         """Process assigned work"""
         try:
@@ -402,7 +427,7 @@ class LocalClient:
         except Exception as e:
             logger.error(f"Error processing work {work_id}: {e}")
             self.submit_work_error(work_id, str(e))
-
+    
     def submit_work_result(self, work_id: str, result: dict):
         """Submit successful work result"""
         try:
@@ -424,7 +449,7 @@ class LocalClient:
                 
         except Exception as e:
             logger.error(f"Error submitting work result: {e}")
-
+    
     def submit_work_error(self, work_id: str, error: str):
         """Submit work error result"""
         try:
@@ -446,16 +471,18 @@ class LocalClient:
                 
         except Exception as e:
             logger.error(f"Error submitting work error: {e}")
-
+    
     def log_request(self, model_name: str, request_type: str, tokens: int, response_time: float, success: bool):
         """Log a request to the database"""
         try:
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
+            
             cursor.execute('''
-                INSERT INTO requests (model_name, request_type, tokens, response_time, success)
+                INSERT INTO request_log (model_name, request_type, tokens, response_time, success)
                 VALUES (?, ?, ?, ?, ?)
             ''', (model_name, request_type, tokens, response_time, success))
+            
             conn.commit()
             conn.close()
             
@@ -463,9 +490,12 @@ class LocalClient:
             self.stats.total_requests += 1
             if success:
                 self.stats.successful_requests += 1
+                self.stats.total_tokens += tokens
+                if response_time > 0:
+                    self.stats.average_tokens_per_second = tokens / response_time
             else:
                 self.stats.failed_requests += 1
-            self.stats.total_tokens += tokens
+                
             self.stats.last_request_time = datetime.now()
             
         except Exception as e:
@@ -474,155 +504,140 @@ class LocalClient:
 # Global client instance
 client = LocalClient()
 
-# Flask routes
+# Routes
 @app.route('/')
-def index():
+def dashboard():
     """Main dashboard"""
-    return render_template('index.html',
+    return render_template('local_dashboard.html', 
+                         client=client, 
                          models=client.models,
-                         stats=asdict(client.stats),
-                         config=client.config,
-                         is_connected=client.is_connected,
-                         host_id=client.host_id)
-# Flask routes
+                         stats=client.stats)
+
 @app.route('/models')
 def models():
-    """Models page"""
-    return render_template('models.html',
-                         models=client.models,
-                         stats=asdict(client.stats),
-                         config=client.config,
-                         is_connected=client.is_connected,
-                         host_id=client.host_id)
-# Flask routes
+    """Model configuration page"""
+    return render_template('local_models.html', 
+                         client=client, 
+                         models=client.models)
+
 @app.route('/metrics')
 def metrics():
-    """Metrics page"""
-    return render_template('metrics.html',
+    """Metrics and analytics page"""
+    # Calculate uptime in hours
+    uptime_hours = ((datetime.now() - client.stats.uptime_start).total_seconds() / 3600)
+    
+    return render_template('local_metrics.html', 
+                         client=client, 
+                         stats=client.stats,
                          models=client.models,
-                         stats=asdict(client.stats),
-                         config=client.config,
-                         is_connected=client.is_connected,
-                         host_id=client.host_id)
+                         uptime_hours=round(uptime_hours, 1))
 
-# Flask routes
 @app.route('/settings')
 def settings():
     """Settings page"""
-    return render_template('settings.html',
-                         models=client.models,
-                         stats=asdict(client.stats),
-                         config=client.config,
-                         is_connected=client.is_connected,
-                         host_id=client.host_id)
+    return render_template('local_settings.html', 
+                         client=client, 
+                         config=client.config)
 
-@app.route('/api/models')
-def api_models():
-    """Get models list"""
-    return jsonify({
-        model_name: asdict(model) for model_name, model in client.models.items()
-    })
+@app.route('/api/refresh_models', methods=['POST'])
+def api_refresh_models():
+    """Refresh available models"""
+    client.refresh_models()
+    return jsonify({'success': True, 'models': len(client.models)})
 
-@app.route('/api/models/<model_name>/toggle', methods=['POST'])
-def toggle_model(model_name):
+@app.route('/api/toggle_model', methods=['POST'])
+def api_toggle_model():
     """Toggle model enabled state"""
+    data = request.get_json()
+    model_name = data.get('model_name')
+    
     if model_name in client.models:
         client.models[model_name].enabled = not client.models[model_name].enabled
-        logger.info(f"Model {model_name} {'enabled' if client.models[model_name].enabled else 'disabled'}")
         return jsonify({'success': True, 'enabled': client.models[model_name].enabled})
+    
     return jsonify({'success': False, 'error': 'Model not found'}), 404
 
-@app.route('/api/models/<model_name>/config', methods=['POST'])
-def update_model_config(model_name):
+@app.route('/api/update_model', methods=['POST'])
+def api_update_model():
     """Update model configuration"""
-    if model_name not in client.models:
-        return jsonify({'success': False, 'error': 'Model not found'}), 404
-    
     data = request.get_json()
-    model = client.models[model_name]
+    model_name = data.get('model_name')
     
-    # Update configurable fields
-    if 'max_concurrent' in data:
-        model.max_concurrent = max(1, min(10, int(data['max_concurrent'])))
-    if 'context_length' in data:
-        model.context_length = max(512, min(32768, int(data['context_length'])))
-    if 'supports_embedding' in data:
-        model.supports_embedding = bool(data['supports_embedding'])
-    if 'supports_vision' in data:
-        model.supports_vision = bool(data['supports_vision'])
-    if 'supports_audio' in data:
-        model.supports_audio = bool(data['supports_audio'])
+    if model_name in client.models:
+        model = client.models[model_name]
+        model.supports_embedding = data.get('supports_embedding', model.supports_embedding)
+        model.supports_vision = data.get('supports_vision', model.supports_vision)
+        model.supports_audio = data.get('supports_audio', model.supports_audio)
+        model.max_concurrent = data.get('max_concurrent', model.max_concurrent)
+        model.context_length = data.get('context_length', model.context_length)
+        
+        return jsonify({'success': True})
     
-    logger.info(f"Updated config for model {model_name}")
-    return jsonify({'success': True})
-
-@app.route('/api/discover_models', methods=['POST'])
-def discover_models():
-    """Rediscover models from Ollama"""
-    client.discover_models()
-    return jsonify({'success': True, 'model_count': len(client.models)})
+    return jsonify({'success': False, 'error': 'Model not found'}), 404
 
 @app.route('/api/connect', methods=['POST'])
-def connect():
+def api_connect():
     """Connect to Andy API pool"""
-    if client.connect_to_pool():
-        return jsonify({'success': True, 'host_id': client.host_id})
-    return jsonify({'success': False, 'error': 'Failed to connect'}), 500
+    success = client.connect_to_pool()
+    return jsonify({'success': success, 'connected': client.is_connected})
 
 @app.route('/api/disconnect', methods=['POST'])
-def disconnect():
+def api_disconnect():
     """Disconnect from Andy API pool"""
-    if client.disconnect_from_pool():
-        return jsonify({'success': True})
-    return jsonify({'success': False, 'error': 'Failed to disconnect'}), 500
+    success = client.disconnect_from_pool()
+    return jsonify({'success': success, 'connected': client.is_connected})
 
-@app.route('/api/config', methods=['GET', 'POST'])
-def config():
-    """Get or update configuration"""
-    if request.method == 'POST':
-        data = request.get_json()
+@app.route('/api/save_config', methods=['POST'])
+def api_save_config():
+    """Save configuration"""
+    data = request.get_json()
+    client.config.update(data)
+    client.save_config()
+    return jsonify({'success': True})
+
+@app.route('/api/metrics_data')
+def api_metrics_data():
+    """Get metrics data for charts"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
         
-        # Update configuration
-        if 'andy_api_url' in data:
-            client.config['andy_api_url'] = data['andy_api_url']
-        if 'ollama_url' in data:
-            client.config['ollama_url'] = data['ollama_url']
-        if 'auto_connect' in data:
-            client.config['auto_connect'] = bool(data['auto_connect'])
-        if 'max_vram_gb' in data:
-            client.config['max_vram_gb'] = max(0, float(data['max_vram_gb']))
-        if 'report_interval' in data:
-            client.config['report_interval'] = max(10, int(data['report_interval']))
+        # Get recent metrics (last 24 hours by default)
+        hours = request.args.get('hours', 24, type=int)
+        since = datetime.now() - timedelta(hours=hours)
         
-        client.save_config()
-        logger.info("Configuration updated")
-        return jsonify({'success': True})
-    
-    return jsonify(client.config)
-
-@app.route('/api/stats')
-def api_stats():
-    """Get current statistics"""
-    return jsonify(asdict(client.stats))
-
-@app.route('/api/status')
-def status():
-    """Get current connection status"""
-    return jsonify({
-        'is_connected': client.is_connected,
-        'host_id': client.host_id,
-        'running': client.running,
-        'enabled_models': [name for name, model in client.models.items() if model.enabled]
-    })
+        cursor.execute('''
+            SELECT timestamp, requests_per_minute, avg_response_time, tokens_per_second, 
+                   queue_length, active_requests, vram_used_gb
+            FROM metrics 
+            WHERE timestamp >= ? 
+            ORDER BY timestamp
+        ''', (since.isoformat(),))
+        
+        metrics = cursor.fetchall()
+        conn.close()
+        
+        return jsonify({
+            'metrics': metrics,
+            'current_stats': {
+                'total_requests': client.stats.total_requests,
+                'successful_requests': client.stats.successful_requests,
+                'failed_requests': client.stats.failed_requests,
+                'average_tokens_per_second': client.stats.average_tokens_per_second,
+                'uptime': (datetime.now() - client.stats.uptime_start).total_seconds(),
+                'connected': client.is_connected,
+                'enabled_models': len([m for m in client.models.values() if m.enabled])
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting metrics data: {e}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    # Start background threads
-    client.start_background_threads()
+    # Initialize models on startup
+    client.refresh_models()
+    client.start_background_tasks()
     
-    try:
-        # Run Flask app
-        app.run(host='0.0.0.0', port=5000, debug=False)
-    finally:
-        # Clean shutdown
-        client.stop_background_threads()
-        client.disconnect_from_pool()
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)

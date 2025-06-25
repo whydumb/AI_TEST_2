@@ -241,7 +241,7 @@
 
             <div class="card">
                 <h3>💾 Pool VRAM</h3>
-                <div class="metric-value" id="totalVram">{{ client.config.max_vram_gb }}GB</div>
+                <div class="metric-value" id="totalVram">{{ config.max_vram_gb|default('Unknown') }}GB</div>
                 <div class="metric-label">Available VRAM</div>
                 <div class="metric-change change-neutral" id="vramChange">
                     This client

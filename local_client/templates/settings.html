@@ -204,11 +204,11 @@
                 <h3>🔗 Connection Settings</h3>
                 
                 <div class="connection-info">
-                    <span class="status-indicator status-{{ 'connected' if client.is_connected else 'disconnected' }}"></span>
-                    <strong>Status:</strong> {{ 'Connected' if client.is_connected else 'Disconnected' }}
+                    <span class="status-indicator status-{{ 'connected' if is_connected else 'disconnected' }}"></span>
+                    <strong>Status:</strong> {{ 'Connected' if is_connected else 'Disconnected' }}
                     <br>
                     <small>
-                        {% if client.is_connected %}
+                        {% if is_connected %}
                             Successfully connected to Andy API pool
                         {% else %}
                             Not connected to pool - check settings below
@@ -280,7 +280,7 @@
                 <strong>Python Version:</strong> Loading...<br>
                 <strong>Ollama Status:</strong> <span id="ollamaStatus">Checking...</span><br>
                 <strong>Available Models:</strong> <span id="modelCount">{{ models|length }}</span><br>
-                <strong>Uptime:</strong> <span id="clientUptime">{{ ((client.stats.uptime_start.now() - client.stats.uptime_start).total_seconds() / 3600) | round(1) }} hours</span>
+                <strong>Uptime:</strong> <span id="clientUptime">Session active</span>
             </div>
         </div>
 

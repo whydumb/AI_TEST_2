@@ -25,6 +25,7 @@ import time
 import json
 import sys
 import logging
+import threading
 from typing import Dict, List, Optional
 
 try:
@@ -179,25 +180,155 @@ class AndyHostClient:
             return None
 
     def run_monitoring_loop(self, ping_interval: int = 60):
-        """Run continuous monitoring loop"""
+        """Run continuous monitoring loop with long-polling work processing"""
         logger.info(f"Starting monitoring loop with {ping_interval}s ping interval")
         
-        try:
-            while True:
+        ping_thread = None
+        running = True
+        
+        def ping_worker():
+            """Background ping worker"""
+            while running:
                 if not self.send_ping():
                     logger.warning("Ping failed, attempting to rejoin pool...")
                     if not self.join_pool():
                         logger.error("Failed to rejoin pool, will retry in next cycle")
-                
                 time.sleep(ping_interval)
+        
+        try:
+            # Start ping thread
+            ping_thread = threading.Thread(target=ping_worker, daemon=True)
+            ping_thread.start()
+            logger.info("Ping thread started")
+            
+            # Main work polling loop
+            while running:
+                try:
+                    # Get available models
+                    models = self.get_client_allowed_models()
+                    
+                    if not models:
+                        logger.warning("No models available, skipping work poll")
+                        time.sleep(10)
+                        continue
+                    
+                    # Poll for work
+                    payload = {
+                        "host_id": self.host_id,
+                        "models": models,
+                        "timeout": 30
+                    }
+                    
+                    response = requests.post(
+                        f"{self.andy_api_url}/api/andy/poll_for_work",
+                        json=payload,
+                        timeout=35  # Slightly longer than poll timeout
+                    )
+                    
+                    if response.status_code == 200:
+                        work_data = response.json()
+                        work_id = work_data.get('work_id')
+                        
+                        if work_id:
+                            logger.info(f"Received work: {work_id} for model {work_data.get('model')}")
+                            
+                            # Process the work
+                            self.process_work(work_id, work_data)
+                        
+                    elif response.status_code == 204:
+                        # No work available, continue polling
+                        pass
+                    elif response.status_code == 404:
+                        logger.warning("Host not registered, attempting to rejoin...")
+                        if not self.join_pool():
+                            logger.error("Failed to rejoin pool")
+                            time.sleep(30)
+                        continue
+                    else:
+                        logger.warning(f"Work poll failed: {response.status_code}")
+                        time.sleep(5)
+                        
+                except requests.exceptions.Timeout:
+                    # Timeout is expected for long polling
+                    pass
+                except Exception as e:
+                    logger.error(f"Work polling error: {e}")
+                    time.sleep(5)
                 
         except KeyboardInterrupt:
             logger.info("Monitoring interrupted by user")
         except Exception as e:
             logger.error(f"Monitoring loop error: {e}")
         finally:
+            running = False
+            if ping_thread:
+                ping_thread.join(timeout=5)
             logger.info("Leaving pool...")
             self.leave_pool()
+    
+    def process_work(self, work_id: str, work_data: dict):
+        """Process assigned work"""
+        try:
+            model = work_data['model']
+            messages = work_data['messages']
+            params = work_data.get('params', {})
+            
+            # Make request to local Ollama
+            ollama_payload = {
+                "model": model,
+                "messages": messages,
+                **params
+            }
+            
+            response = requests.post(
+                f"{self.ollama_url}/api/chat",
+                json=ollama_payload,
+                timeout=120
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                
+                # Submit successful result
+                submit_payload = {
+                    "work_id": work_id,
+                    "result": result
+                }
+            else:
+                # Submit error result
+                submit_payload = {
+                    "work_id": work_id,
+                    "error": f"Ollama request failed: {response.status_code}"
+                }
+            
+            # Submit result back to server
+            submit_response = requests.post(
+                f"{self.andy_api_url}/api/andy/submit_work_result",
+                json=submit_payload,
+                timeout=10
+            )
+            
+            if submit_response.status_code == 200:
+                logger.info(f"Work completed: {work_id}")
+            else:
+                logger.warning(f"Failed to submit result: {submit_response.status_code}")
+                
+        except Exception as e:
+            logger.error(f"Error processing work {work_id}: {e}")
+            
+            # Submit error result
+            try:
+                submit_payload = {
+                    "work_id": work_id,
+                    "error": str(e)
+                }
+                requests.post(
+                    f"{self.andy_api_url}/api/andy/submit_work_result",
+                    json=submit_payload,
+                    timeout=10
+                )
+            except:
+                pass  # Ignore errors when submitting error results
 
 def main():
     parser = argparse.ArgumentParser(description='Andy API Host Client')

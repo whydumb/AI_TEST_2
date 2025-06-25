@@ -1,7 +1,7 @@
 {
   "andy_api_url": "http://localhost:3002",
   "ollama_url": "http://localhost:11434",
-  "client_name": "Local Andy Client",
+  "client_name": "Local Test Client",
   "api_key": "",
   "auto_connect": false,
   "report_interval": 30,

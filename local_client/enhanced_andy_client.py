@@ -141,12 +141,14 @@ class AndyAPIClient:
         usage = self.get_current_usage()
         
         payload = {
-            "models": models,
-            "max_clients": 2,  # Conservative default
-            "endpoint": self.ollama_url,
-            "capabilities": ["text"],  # Could be enhanced to detect vision models
-            **self.system_info,
-            **usage
+            "info": {
+                "models": models,
+                "max_clients": 2,  # Conservative default
+                "endpoint": self.ollama_url,
+                "capabilities": ["text"],  # Could be enhanced to detect vision models
+                **self.system_info,
+                **usage
+            }
         }
         
         try:
@@ -161,8 +163,7 @@ class AndyAPIClient:
                 self.host_id = data["host_id"]
                 print(f"✅ Successfully joined pool!")
                 print(f"   Host ID: {self.host_id}")
-                print(f"   Pool size: {data['pool_size']}")
-                print(f"   Ping interval: {data['ping_interval']}s")
+                print(f"   Status: {data.get('status', 'unknown')}")
                 return True
             else:
                 print(f"❌ Failed to join pool: {response.status_code}")
@@ -237,6 +238,124 @@ class AndyAPIClient:
             
             time.sleep(15)  # Ping every 15 seconds
     
+    def work_polling_worker(self):
+        """Simple polling worker that checks for work every few seconds"""
+        print("🎯 Starting simple work polling...")
+        
+        while self.running:
+            try:
+                # Get available models
+                models = self.discover_ollama_models()
+                model_names = [model['name'] for model in models]
+                
+                if not model_names:
+                    time.sleep(5)
+                    continue
+                
+                # Check for work (non-blocking)
+                response = requests.post(
+                    f"{self.server_url}/api/andy/check_for_work",
+                    json={
+                        "host_id": self.host_id,
+                        "models": model_names
+                    },
+                    timeout=10  # Short timeout
+                )
+                
+                if response.status_code == 200:
+                    work_data = response.json()
+                    work_id = work_data.get("work_id")
+                    
+                    if work_id:
+                        print(f"📝 Received work: {work_id}")
+                        self.process_work(work_id, work_data)
+                        # Process work immediately, then continue polling
+                
+                elif response.status_code == 204:
+                    # No work available, which is normal
+                    pass
+                elif response.status_code == 404:
+                    print("❌ Host not registered, attempting to rejoin...")
+                    if not self.join_pool():
+                        print("Failed to rejoin pool, stopping...")
+                        break
+                else:
+                    print(f"⚠️ Unexpected response: {response.status_code}")
+                
+            except requests.exceptions.Timeout:
+                print("⏰ Work check timeout (normal)")
+            except requests.exceptions.ConnectionError:
+                print("🔌 Connection error, will retry...")
+            except Exception as e:
+                print(f"❌ Error in work polling: {e}")
+            
+            # Wait before next poll (simple polling interval)
+            time.sleep(3)  # Poll every 3 seconds
+    
+    def process_work(self, work_id, work_data):
+        """Process assigned work"""
+        try:
+            model = work_data['model']
+            messages = work_data['messages']
+            params = work_data.get('params', {})
+            
+            # Make request to local Ollama
+            ollama_payload = {
+                "model": model,
+                "messages": messages,
+                **params
+            }
+            
+            response = requests.post(
+                f"{self.ollama_url}/api/chat",
+                json=ollama_payload,
+                timeout=120
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                
+                # Submit successful result
+                submit_payload = {
+                    "work_id": work_id,
+                    "result": result
+                }
+            else:
+                # Submit error result
+                submit_payload = {
+                    "work_id": work_id,
+                    "error": f"Ollama request failed: {response.status_code}"
+                }
+            
+            # Submit result back to server
+            submit_response = requests.post(
+                f"{self.server_url}/api/andy/submit_work_result",
+                json=submit_payload,
+                timeout=10
+            )
+            
+            if submit_response.status_code == 200:
+                print(f"✅ Work completed: {work_id}")
+            else:
+                print(f"⚠️  Failed to submit result: {submit_response.status_code}")
+                
+        except Exception as e:
+            print(f"❌ Error processing work {work_id}: {e}")
+            
+            # Submit error result
+            try:
+                submit_payload = {
+                    "work_id": work_id,
+                    "error": str(e)
+                }
+                requests.post(
+                    f"{self.server_url}/api/andy/submit_work_result",
+                    json=submit_payload,
+                    timeout=10
+                )
+            except Exception as submit_error:
+                print(f"Failed to submit error result: {submit_error}")
+    
     def start(self):
         """Start the client"""
         print("🚀 Starting Andy API Enhanced Client...")
@@ -247,10 +366,18 @@ class AndyAPIClient:
             return False
         
         self.running = True
+        
+        # Start ping thread
         self.ping_thread = threading.Thread(target=self.ping_worker, daemon=True)
         self.ping_thread.start()
         
+        # Start work polling thread
+        self.work_thread = threading.Thread(target=self.work_polling_worker, daemon=True)
+        self.work_thread.start()
+        
         print("✅ Client started successfully!")
+        print("📡 Ping thread running")
+        print("🎯 Work polling thread running")
         print("Press Ctrl+C to stop...")
         
         try:
@@ -265,8 +392,12 @@ class AndyAPIClient:
     def stop(self):
         """Stop the client"""
         self.running = False
-        if self.ping_thread:
+        
+        # Wait for threads to finish
+        if hasattr(self, 'ping_thread') and self.ping_thread:
             self.ping_thread.join(timeout=5)
+        if hasattr(self, 'work_thread') and self.work_thread:
+            self.work_thread.join(timeout=5)
         
         self.leave_pool()
         print("👋 Client stopped")

@@ -324,7 +324,7 @@
     <script>
         async function toggleModel(modelName, checkbox) {
             try {
-                const response = await fetch('/api/toggle_model', {
+                const response = await fetch(`/api/models/${encodeURIComponent(modelName)}/toggle`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ model_name: modelName })
@@ -348,12 +348,12 @@
             }
         }
 
-        async function updateCapability(modelName, capability, value) {
+        async function updateCapability(modelName, field, value) {
             try {
                 const payload = { model_name: modelName };
-                payload[capability] = value;
+                payload[field] = value;
                 
-                const response = await fetch('/api/update_model', {
+                const response = await fetch(`/api/models/${encodeURIComponent(modelName)}/config`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -372,7 +372,7 @@
                 const payload = { model_name: modelName };
                 payload[setting] = value;
                 
-                const response = await fetch('/api/update_model', {
+                const response = await fetch(`/api/models/${encodeURIComponent(modelName)}/config`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)

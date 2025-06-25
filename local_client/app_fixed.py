@@ -484,37 +484,6 @@ def index():
                          config=client.config,
                          is_connected=client.is_connected,
                          host_id=client.host_id)
-# Flask routes
-@app.route('/models')
-def models():
-    """Models page"""
-    return render_template('models.html',
-                         models=client.models,
-                         stats=asdict(client.stats),
-                         config=client.config,
-                         is_connected=client.is_connected,
-                         host_id=client.host_id)
-# Flask routes
-@app.route('/metrics')
-def metrics():
-    """Metrics page"""
-    return render_template('metrics.html',
-                         models=client.models,
-                         stats=asdict(client.stats),
-                         config=client.config,
-                         is_connected=client.is_connected,
-                         host_id=client.host_id)
-
-# Flask routes
-@app.route('/settings')
-def settings():
-    """Settings page"""
-    return render_template('settings.html',
-                         models=client.models,
-                         stats=asdict(client.stats),
-                         config=client.config,
-                         is_connected=client.is_connected,
-                         host_id=client.host_id)
 
 @app.route('/api/models')
 def api_models():
