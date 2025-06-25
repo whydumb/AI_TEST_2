@@ -2,7 +2,7 @@
 """
 Andy API Local Client - Fixed Version
 A web-based interface for hosting Ollama models and connecting to the Andy API pool
-This version uses the new simple polling approach with check_for_work endpoint.
+This version uses a robust, verified connection protocol.
 """
 
 import os
@@ -11,7 +11,7 @@ import time
 import threading
 import requests
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, send_from_directory
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional
 import sqlite3
@@ -178,53 +178,69 @@ class LocalClient:
         return self.load_config()
 
     def connect_to_pool(self):
-        """Connect to the Andy API pool using the returned host_id."""
-        try:
-            config = self.get_fresh_config()
-            logger.info(f"Connecting to Andy API at: {config['andy_api_url']}")
-            
-            enabled_models = [asdict(model) for model in self.models.values() if model.enabled]
-            if not enabled_models:
-                logger.error("Cannot connect: No models are enabled.")
-                return False
+        """Connect to the Andy API pool and verify the connection with a ping."""
+        if self.is_connected:
+            logger.info("Already connected.")
+            return True
 
-            payload = {
-                'info': {
-                    'models': enabled_models,
-                    'max_clients': sum(model.max_concurrent for model in self.models.values() if model.enabled),
-                    'endpoint': config['ollama_url'],
-                    'capabilities': ['text', 'embedding'],
-                    'vram_total_gb': config.get('max_vram_gb', 0),
-                    'client_uuid': self.client_uuid,
-                    'client_name': config.get('client_name', 'Unnamed Client')
-                }
+        config = self.get_fresh_config()
+        logger.info(f"Attempting to connect to Andy API at: {config['andy_api_url']}")
+        
+        enabled_models = [asdict(model) for model in self.models.values() if model.enabled]
+        if not enabled_models:
+            logger.error("Cannot connect: No models are enabled.")
+            return False
+
+        payload = {
+            'info': {
+                'models': enabled_models,
+                'max_clients': sum(model.max_concurrent for model in self.models.values() if model.enabled),
+                'endpoint': config['ollama_url'],
+                'capabilities': ['text', 'embedding'],
+                'vram_total_gb': config.get('max_vram_gb', 0),
+                'client_uuid': self.client_uuid,
+                'client_name': config.get('client_name', 'Unnamed Client')
             }
-            
-            logger.info(f"Joining the pool at {config['andy_api_url']}...")
+        }
+        
+        try:
+            logger.info(f"Joining the pool...")
             response = requests.post(f"{config['andy_api_url']}/api/andy/join_pool", json=payload, timeout=30)
             
-            if response.status_code == 200:
-                response_data = response.json()
-                self.host_id = response_data.get('host_id')
-                
-                if not self.host_id:
-                    logger.error("Failed to connect: Server did not provide a host_id.")
-                    self.is_connected = False
-                    return False
-
-                self.is_connected = True
-                logger.info(f"Successfully connected to pool. Host ID: {self.host_id}")
-                
-                self.report_status()
-                return True
-            else:
-                logger.error(f"Failed to connect to pool: {response.status_code} - {response.text}")
-                self.is_connected = False
+            if response.status_code != 200:
+                logger.error(f"Failed to join pool: {response.status_code} - {response.text}")
                 return False
-                
+
+            response_data = response.json()
+            received_host_id = response_data.get('host_id')
+            if not received_host_id:
+                logger.error("Failed to connect: Server did not provide a host_id.")
+                return False
+
+            logger.info(f"Received host_id: {received_host_id}. Verifying connection with pings...")
+            
+            # --- Verification Loop ---
+            for i in range(5):  # 5 attempts over ~5 seconds
+                time.sleep(i * 0.5)  # Staggered delay
+                ping_payload = {'host_id': received_host_id, 'current_load': 0, 'status': 'active'}
+                try:
+                    ping_response = requests.post(f"{config['andy_api_url']}/api/andy/ping_pool", json=ping_payload, timeout=5)
+                    if ping_response.status_code == 200:
+                        logger.info(f"Connection verified with ping on attempt {i+1}.")
+                        self.host_id = received_host_id
+                        self.is_connected = True
+                        return True  # Success!
+                    logger.warning(f"Ping verification attempt {i+1} failed with status {ping_response.status_code}. Retrying...")
+                except requests.RequestException as ping_e:
+                    logger.warning(f"Ping verification attempt {i+1} failed with network error: {ping_e}. Retrying...")
+            
+            # If all pings fail
+            logger.error("Failed to verify connection after multiple ping attempts. Aborting connection.")
+            # We don't need to call leave_pool, as the server will time out the un-pinged host.
+            return False
+
         except Exception as e:
-            logger.error(f"Error connecting to pool: {e}", exc_info=True)
-            self.is_connected = False
+            logger.error(f"Error during connection process: {e}", exc_info=True)
             return False
 
     def disconnect_from_pool(self):
@@ -254,13 +270,7 @@ class LocalClient:
             
         try:
             current_load = sum(1 for model in self.models.values() if model.enabled)
-            
-            payload = {
-                'host_id': self.host_id,
-                'current_load': current_load,
-                'status': 'active',
-                'vram_used_gb': 0, 'ram_used_gb': 0, 'cpu_usage_percent': 0
-            }
+            payload = {'host_id': self.host_id, 'current_load': current_load, 'status': 'active'}
             
             response = requests.post(f"{self.config['andy_api_url']}/api/andy/ping_pool", json=payload, timeout=10)
             
@@ -291,18 +301,11 @@ class LocalClient:
         logger.info("Background threads stopped")
 
     def _connection_loop(self):
+        """Background thread for maintaining connection if auto_connect is on."""
         while self.running:
-            should_be_connected = any(model.enabled for model in self.models.values())
-            if self.config.get('auto_connect'): should_be_connected = True
-            
-            if should_be_connected and not self.is_connected:
-                logger.info("Attempting to connect to pool...")
-                if self.connect_to_pool():
-                    logger.info("Successfully reconnected to pool")
-                else:
-                    logger.warning("Failed to reconnect, will retry in 30 seconds")
-                    time.sleep(30)
-                    continue
+            if self.config.get('auto_connect') and not self.is_connected:
+                logger.info("Auto-connect is ON. Attempting to connect to pool...")
+                self.connect_to_pool()
             time.sleep(60)
 
     def _status_loop(self):
@@ -329,13 +332,11 @@ class LocalClient:
                             logger.info(f"Received work: {work_id} for model {work_data.get('model')}")
                             threading.Thread(target=self.process_work, args=(work_id, work_data)).start()
                     elif response.status_code == 404:
-                        logger.warning("Host not registered, attempting to reconnect...")
+                        logger.warning("Host not registered, marking as disconnected.")
                         self.is_connected = False
-                        time.sleep(10)
-                except requests.exceptions.RequestException:
-                    pass
-                except Exception as e:
-                    logger.error(f"Work polling error: {e}")
+                        self.host_id = None
+                except requests.exceptions.RequestException: pass
+                except Exception as e: logger.error(f"Work polling error: {e}")
                 time.sleep(3)
             else:
                 time.sleep(5)
@@ -394,6 +395,11 @@ class LocalClient:
             logger.error(f"Error logging request: {e}")
 
 client = LocalClient()
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 @app.route('/')
 def index():
@@ -487,9 +493,13 @@ def api_metrics_data():
         return jsonify({'error': 'Failed to retrieve metrics'}), 500
 
 if __name__ == '__main__':
-    client.start_background_threads()
+    if client.config.get('auto_connect'):
+        client.start_background_threads()
+
     port = client.config.get('flask_port', 5000)
     try:
+        # We start the background threads regardless, so polling works when manually connected.
+        client.start_background_threads()
         app.run(host='0.0.0.0', port=port, debug=False)
     finally:
         client.stop_background_threads()
