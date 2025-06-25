@@ -134,18 +134,37 @@ function cleanReasoningMarkers(input) {
     return input.replace(/\/think/g, '').replace(/\/no_think/g, '').trim();
 }
 
-// Helper function to determine the sub-category (coding, gameplay, summarization)
 function determineSubCategory(input, response) {
-    // Simple heuristic. This can be improved with more sophisticated NLP.
     const lowerInput = input.toLowerCase();
     const lowerResponse = response.toLowerCase();
 
-    // Stricter check for Javascript code blocks in the model's response.
-    const containsJsCodeBlock = /```(javascript|js)\s*[\s\S]*?```/.test(lowerResponse);
+    // --- Start of Improved JavaScript Detection Logic ---
 
-    if (containsJsCodeBlock) {
+    // 1. High-Confidence Check: Look for explicitly labeled JavaScript markdown blocks.
+    // This is the fastest and most reliable indicator.
+    const explicitJsBlockRegex = /```(javascript|js)\s*[\s\S]*?```/;
+    if (explicitJsBlockRegex.test(lowerResponse)) {
         return 'coding';
-    } else if (lowerInput.includes('summarize') || lowerResponse.includes('summary') || lowerResponse.includes('summarizing')) {
+    }
+
+    // 2. Medium-Confidence Check: Look for generic code blocks that contain JS keywords.
+    // This catches cases where the model forgets to label the code language.
+    const genericBlockRegex = /```([\s\S]*?)```/g; // Use 'g' to find all blocks
+    const jsKeywordsRegex = /\b(const|let|var|function|async|await|import|export|require|=>|document|window|console\.)\b/;
+    
+    let match;
+    // Iterate through all generic code blocks found in the response.
+    while ((match = genericBlockRegex.exec(lowerResponse)) !== null) {
+        const blockContent = match[1]; // The content inside the ```
+        // If the content of any block contains JS-specific keywords, classify as coding.
+        if (jsKeywordsRegex.test(blockContent)) {
+            return 'coding';
+        }
+    }
+
+    // --- End of Improved Logic ---
+
+    if (lowerInput.includes('update your memory')) {
         return 'summarization';
     } else {
         return 'gameplay'; // Default to gameplay
@@ -568,7 +587,11 @@ function initializeCounts() {
         console.log('\n' + '='.repeat(60));
         console.log('EXTERNAL LOGGING ENABLED');
         console.log('Data will be sent to mindcraft.riqvip.dev/api/log');
-        console.log('Please be aware of the data and privacy implications.');
+        console.log('The data will only be used to train future Andy models');
+        console.log('We only collect the messages you send to the agent');
+        console.log('And no other information.');
+        console.log('');
+        console.log('We recommend leaving this on to make Mindcraft-CE better!');
         console.log('='.repeat(60) + '\n');
         // Send usernames to the server is now handled by the agent
     }

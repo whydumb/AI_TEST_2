@@ -54,6 +54,12 @@ export class Prompter {
         this.convo_examples = null;
         this.coding_examples = null;
         
+        // Initialize personality system
+        this.current_personality = null;
+        this.personality_set_time = null;
+        this._loadPersonalities();
+        this._selectNewPersonality();
+        
         let name = this.profile.name;
         this.cooldown = this.profile.cooldown ? this.profile.cooldown : 0;
         this.last_prompt_time = 0;
@@ -223,6 +229,31 @@ export class Prompter {
             throw new Error('Unknown API:', profile.api);
         return model;
     }
+    
+    _loadPersonalities() {
+        try {
+            const personalitiesPath = './profiles/defaults/personalities.json';
+            const personalitiesData = JSON.parse(readFileSync(personalitiesPath, 'utf8'));
+            this.personalities = personalitiesData.personalities;
+            console.log(`Loaded ${this.personalities.length} personalities.`);
+        } catch (error) {
+            console.warn('Failed to load personalities file, using default personality:', error.message);
+            this.personalities = ["Friendly and helpful, always eager to assist with various tasks."];
+        }
+    }
+    
+    _selectNewPersonality() {
+        if (this.personalities && this.personalities.length > 0) {
+            const randomIndex = Math.floor(Math.random() * this.personalities.length);
+            this.current_personality = this.personalities[randomIndex];
+            this.personality_set_time = Date.now();
+            console.log(`Selected new personality: ${this.current_personality.substring(0, 50)}...`);
+        } else {
+            this.current_personality = "Friendly and helpful, always eager to assist with various tasks.";
+            this.personality_set_time = Date.now();
+        }
+    }
+    
     getName() {
         return this.profile.name;
     }
@@ -257,6 +288,12 @@ export class Prompter {
     }
 
     async replaceStrings(prompt, messages, examples=null, to_summarize=[], last_goals=null) {
+
+        // Personality has to go first since some of the personalities contain $NAME
+        if (prompt.includes('$PERSONALITY')) {
+            prompt = prompt.replaceAll('$PERSONALITY', this.current_personality || "Friendly and helpful, always eager to assist with various tasks.");
+        }
+
         prompt = prompt.replaceAll('$NAME', this.agent.name);
 
         if (prompt.includes('$STATS')) {
@@ -313,6 +350,9 @@ export class Prompter {
                 }
                 prompt = prompt.replaceAll('$BLUEPRINTS', blueprints.slice(0, -2));
             }
+        }
+        if (prompt.includes('$PERSONALITY')) {
+            prompt = prompt.replaceAll('$PERSONALITY', this.current_personality || "Friendly and helpful, always eager to assist with various tasks.");
         }
 
         // check if there are any remaining placeholders with syntax $<word>
@@ -426,6 +466,11 @@ export class Prompter {
         prompt = await this.replaceStrings(prompt, null, null, to_summarize);
         let resp = await this.chat_model.sendRequest([], prompt);
         await this._saveLog(prompt, to_summarize, resp, 'memSaving');
+        
+        // Select new personality after memory summarization
+        this._selectNewPersonality();
+        console.log('Memory summarized - selecting new personality for next conversation cycle.');
+        
         if (resp?.includes('</think>')) {
             const [_, afterThink] = resp.split('</think>')
             resp = afterThink

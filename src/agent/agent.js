@@ -20,9 +20,14 @@ import settings from '../../settings.js';
 import { serverProxy } from './agent_proxy.js';
 import { Task } from './tasks/tasks.js';
 import { say } from './speak.js';
-import { sendUsernames } from '../../logger.js';
 
 export class Agent {
+    constructor() {
+        // ...existing code...
+        this._lastChatTime = Date.now();
+        this._idleTriggered = false;
+        this._lastModelResponseTime = Date.now();
+    }
     async start(profile_fp, load_mem=false, init_message=null, count_id=0, task_path=null, task_id=null) {
         this.last_sender = null;
         // Safely attach agent instance to a global-like object so STT code can access it.
@@ -107,10 +112,6 @@ export class Agent {
             try {
                 clearTimeout(spawnTimeout);
                 addBrowserViewer(this.bot, count_id);
-
-                if (settings.external_logging) {
-                    sendUsernames(this.bot);
-                }
 
                 // wait for a bit so stats are not undefined
                 await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -469,6 +470,9 @@ export class Agent {
             let history_for_prompt = this.history.getHistory(); // get fresh history for each prompt turn
             let res = await this.prompter.promptConvo(history_for_prompt);
 
+            // Reset timer ogni volta che ricevi una risposta dal modello
+            this._lastModelResponseTime = Date.now();
+
             console.log(`${this.name} full response to ${source}: ""${res}""`);
 
             if (res.trim().length === 0) {
@@ -538,7 +542,7 @@ export class Agent {
         return used_command;
     }
 
-    routeResponse(to_player, message) {
+    async routeResponse(to_player, message) {
         if (this.shut_up) return;
         let self_prompt = to_player === 'system' || to_player === this.name;
         if (self_prompt && this.last_sender) {
@@ -587,6 +591,9 @@ export class Agent {
             }
             this.bot.chat(message);
         }
+        // Aggiorna il timestamp ogni volta che il bot scrive in chat
+        this._lastChatTime = Date.now();
+        this._idleTriggered = false;
     }
 
     // Send agent status to web interface
@@ -661,7 +668,7 @@ export class Agent {
             console.warn('Bot kicked!', reason);
             this.cleanKill('Bot kicked! Killing agent process.');
         });
-        this.bot.on('messagestr', (message, _, jsonMsg) => {
+        this.bot.on('messagestr', async (message, _, jsonMsg) => {
             if (jsonMsg.translate && jsonMsg.translate.startsWith('death') && message.startsWith(this.name)) {
                 console.log('Agent died: ', message);
                 let death_pos = this.bot.entity.position;
@@ -738,6 +745,14 @@ export class Agent {
         await this.bot.modes.update();
         this.self_prompter.update(delta);
         await this.checkTaskDone();
+        // --- AUTO IDLE TRIGGER ---
+        if (settings.auto_idle_trigger && settings.auto_idle_trigger.enabled) {
+            const timeout = (settings.auto_idle_trigger.timeout_secs || 60) * 1000;
+            if (Date.now() - this._lastModelResponseTime > timeout) {
+                this._lastModelResponseTime = Date.now();
+                this.handleMessage('system', settings.auto_idle_trigger.message, 1);
+            }
+        }
     }
 
     isIdle() {
