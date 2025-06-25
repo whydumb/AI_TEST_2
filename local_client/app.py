@@ -16,6 +16,21 @@ from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional
 import sqlite3
 import logging
+from urllib.parse import unquote
+import uuid
+
+# Optional imports for system monitoring
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    
+try:
+    import GPUtil
+    GPUTIL_AVAILABLE = True
+except ImportError:
+    GPUTIL_AVAILABLE = False
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -62,6 +77,7 @@ class LocalClient:
         self.connection_thread = None
         self.status_thread = None
         self.work_thread = None
+        self.client_uuid = self.load_or_create_uuid()
         
         # Initialize database
         self.init_database()
@@ -70,7 +86,7 @@ class LocalClient:
         self.discover_models()
 
     def load_config(self) -> dict:
-        """Load configuration from file"""
+        """Load configuration from file and environment, log URLs used."""
         default_config = {
             'andy_api_url': DEFAULT_ANDY_API_URL,
             'ollama_url': DEFAULT_OLLAMA_URL,
@@ -78,16 +94,27 @@ class LocalClient:
             'max_vram_gb': 0,
             'report_interval': 30
         }
-        
+        config = default_config.copy()
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, 'r') as f:
-                    config = json.load(f)
-                    return {**default_config, **config}
+                    file_config = json.load(f)
+                    config.update(file_config)
             except Exception as e:
                 logger.error(f"Error loading config: {e}")
-        
-        return default_config
+        # Override with environment variables if set
+        if 'ANDY_API_URL' in os.environ:
+            config['andy_api_url'] = os.environ['ANDY_API_URL']
+        if 'OLLAMA_URL' in os.environ:
+            config['ollama_url'] = os.environ['OLLAMA_URL']
+        # Log the URLs being used
+        logger.info(f"Using Andy API URL: {config['andy_api_url']}")
+        logger.info(f"Using Ollama URL: {config['ollama_url']}")
+        # Warn if using localhost in a non-local environment
+        if (not config['andy_api_url'].startswith('http://localhost') and
+            'localhost' in config['andy_api_url']):
+            logger.warning(f"Andy API URL is set to localhost, but you may be running in a non-local environment!")
+        return config
 
     def save_config(self):
         """Save configuration to file"""
@@ -119,18 +146,16 @@ class LocalClient:
             logger.error(f"Database initialization error: {e}")
 
     def discover_models(self):
-        """Discover available models from Ollama"""
+        """Discover available models from Ollama and enable the first one by default if none are enabled."""
         try:
             response = requests.get(f"{self.config['ollama_url']}/api/tags", timeout=10)
             if response.status_code == 200:
                 data = response.json()
                 current_models = set(self.models.keys())
                 discovered_models = set()
-                
                 for model in data.get('models', []):
                     model_name = model['name']
                     discovered_models.add(model_name)
-                    
                     if model_name not in self.models:
                         self.models[model_name] = ModelConfig(
                             name=model_name,
@@ -138,21 +163,77 @@ class LocalClient:
                             context_length=model.get('context_length', 4096),
                             quantization=model.get('quantization', 'unknown')
                         )
-                
                 # Remove models that are no longer available
                 for model_name in current_models - discovered_models:
                     if model_name in self.models:
                         del self.models[model_name]
-                        
+                # --- Enable the first model by default if none are enabled ---
+                if not any(m.enabled for m in self.models.values()) and self.models:
+                    first_model = next(iter(self.models.values()))
+                    first_model.enabled = True
+                    logger.info(f"Auto-enabled model: {first_model.name} for local testing.")
                 logger.info(f"Discovered {len(self.models)} models")
             else:
                 logger.error(f"Failed to discover models: {response.status_code}")
         except Exception as e:
             logger.error(f"Error discovering models: {e}")
 
+    def load_or_create_uuid(self):
+        uuid_file = 'client_uuid.txt'
+        if os.path.exists(uuid_file):
+            with open(uuid_file, 'r') as f:
+                return f.read().strip()
+        new_uuid = str(uuid.uuid4())
+        with open(uuid_file, 'w') as f:
+            f.write(new_uuid)
+        return new_uuid
+
+    def get_fresh_config(self) -> dict:
+        """Always reload config from file and environment for every connection attempt."""
+        default_config = {
+            'andy_api_url': DEFAULT_ANDY_API_URL,
+            'ollama_url': DEFAULT_OLLAMA_URL,
+            'auto_connect': False,
+            'max_vram_gb': 0,
+            'report_interval': 30
+        }
+        config = default_config.copy()
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, 'r') as f:
+                    file_config = json.load(f)
+                    config.update(file_config)
+            except Exception as e:
+                logger.error(f"Error loading config: {e}")
+        if 'ANDY_API_URL' in os.environ:
+            config['andy_api_url'] = os.environ['ANDY_API_URL']
+        if 'OLLAMA_URL' in os.environ:
+            config['ollama_url'] = os.environ['OLLAMA_URL']
+        return config
+
     def connect_to_pool(self):
-        """Connect to the Andy API pool"""
+        """Connect to the Andy API pool with robust host detection and sync. Always reload config."""
         try:
+            config = self.get_fresh_config()
+            logger.info(f"Connecting to Andy API at: {config['andy_api_url']}")
+            # Step 1: Get pool status before joining to record existing host IDs
+            logger.info("Getting pool status before joining...")
+            try:
+                before_response = requests.get(
+                    f"{config['andy_api_url']}/api/andy/pool_status",
+                    timeout=10
+                )
+                before_host_ids = set()
+                if before_response.status_code == 200:
+                    before_data = before_response.json()
+                    before_host_ids = {host['host_id'] for host in before_data.get('hosts', [])}
+                    logger.info(f"Found {len(before_host_ids)} existing hosts in pool")
+                else:
+                    logger.warning(f"Failed to get initial pool status from {config['andy_api_url']}: {before_response.status_code}")
+            except Exception as e:
+                logger.warning(f"Error getting initial pool status from {config['andy_api_url']}: {e}")
+                before_host_ids = set()
+            # Step 2: Prepare join payload
             enabled_models = [
                 {
                     'name': model.name,
@@ -165,38 +246,102 @@ class LocalClient:
                 }
                 for model in self.models.values() if model.enabled
             ]
-            
             payload = {
                 'models': enabled_models,
                 'max_clients': sum(model.max_concurrent for model in self.models.values() if model.enabled),
-                'endpoint': self.config['ollama_url'],
-                'capabilities': ['text'],  # Could be enhanced based on models
-                'vram_total_gb': self.config.get('max_vram_gb', 0),
-                'vram_used_gb': 0,  # Would need to implement actual VRAM monitoring
-                'gpu_compute_capability': 0,  # Could implement with GPU monitoring
-                'cpu_cores': 0,  # Could implement with psutil
-                'ram_total_gb': 0,  # Could implement with psutil
-                'ram_used_gb': 0,  # Could implement with psutil
+                'endpoint': config['ollama_url'],
+                'capabilities': ['text'],
+                'vram_total_gb': config.get('max_vram_gb', 0),
+                'vram_used_gb': 0,
+                'gpu_compute_capability': 0,
+                'cpu_cores': 0,
+                'ram_total_gb': 0,
+                'ram_used_gb': 0,
+                'client_uuid': self.client_uuid  # Add persistent client UUID
             }
-            
+            # Step 3: Join the pool
+            logger.info(f"Joining the pool at {config['andy_api_url']}...")
             response = requests.post(
-                f"{self.config['andy_api_url']}/api/andy/join_pool",
+                f"{config['andy_api_url']}/api/andy/join_pool",
                 json={'info': payload},
                 timeout=30
             )
-            
             if response.status_code == 200:
                 response_data = response.json()
-                self.host_id = response_data.get('host_id')
+                server_provided_host_id = response_data.get('host_id')
+                logger.info(f"Server provided host_id: {server_provided_host_id}")
+                # Step 4: Wait up to 60s for host to appear in pool (exponential backoff)
+                logger.info("Waiting for host to appear in pool status (up to 60s)...")
+                detected_host_id = None
+                max_wait = 60
+                wait = 0.5
+                total_wait = 0
+                while total_wait < max_wait:
+                    try:
+                        after_response = requests.get(
+                            f"{config['andy_api_url']}/api/andy/pool_status",
+                            timeout=10
+                        )
+                        if after_response.status_code == 200:
+                            after_data = after_response.json()
+                            after_host_ids = {host['host_id'] for host in after_data.get('hosts', [])}
+                            new_host_ids = after_host_ids - before_host_ids
+                            if len(new_host_ids) == 1:
+                                detected_host_id = list(new_host_ids)[0]
+                                logger.info(f"Detected our actual host_id: {detected_host_id} after {total_wait:.1f}s")
+                                break
+                            elif server_provided_host_id in after_host_ids:
+                                detected_host_id = server_provided_host_id
+                                logger.info(f"Server-provided host_id found in pool after {total_wait:.1f}s")
+                                break
+                            else:
+                                logger.debug(f"Host not yet visible in pool after {total_wait:.1f}s, retrying...")
+                        else:
+                            logger.warning(f"Failed to get pool status after joining: {after_response.status_code}")
+                    except Exception as e:
+                        logger.warning(f"Error getting pool status after join: {e}")
+                    time.sleep(wait)
+                    total_wait += wait
+                    wait = min(wait * 1.5, 10)  # Exponential backoff, max 10s
+                if not detected_host_id:
+                    logger.warning(f"Host not visible in pool after {max_wait}s, falling back to server-provided host_id: {server_provided_host_id}")
+                    detected_host_id = server_provided_host_id
+                self.host_id = detected_host_id
                 self.is_connected = True
-                logger.info(f"Successfully connected to Andy API pool with host_id: {self.host_id}")
+                # Step 5: Immediately ping to establish presence with our detected host ID
+                logger.info("Sending initial ping to establish pool presence...")
+                for attempt in range(5):
+                    try:
+                        time.sleep(0.5)
+                        ping_payload = {
+                            'host_id': self.host_id,
+                            'current_load': sum(1 for model in self.models.values() if model.enabled),
+                            'status': 'active',
+                            'vram_used_gb': 0,
+                            'ram_used_gb': 0,
+                            'cpu_usage_percent': 0
+                        }
+                        ping_response = requests.post(
+                            f"{config['andy_api_url']}/api/andy/ping_pool",
+                            json=ping_payload,
+                            timeout=10
+                        )
+                        if ping_response.status_code == 200:
+                            logger.info(f"Initial ping successful on attempt {attempt + 1}")
+                            break
+                        elif ping_response.status_code == 404:
+                            logger.warning(f"Host not found on ping attempt {attempt + 1}, retrying...")
+                            continue
+                        else:
+                            logger.warning(f"Initial ping failed with status {ping_response.status_code}")
+                    except Exception as e:
+                        logger.warning(f"Initial ping attempt {attempt + 1} failed: {e}")
+                        continue
                 return True
             else:
-                logger.error(f"Failed to connect to pool: {response.status_code} - {response.text}")
-                
+                logger.error(f"Failed to connect to pool at {config['andy_api_url']}: {response.status_code} - {response.text}")
         except Exception as e:
-            logger.error(f"Error connecting to pool: {e}")
-            
+            logger.error(f"Error connecting to pool at {getattr(self, 'config', {}).get('andy_api_url', 'unknown')}: {e}")
         self.is_connected = False
         return False
 
@@ -252,11 +397,18 @@ class LocalClient:
                 timeout=10
             )
             
-            if response.status_code != 200:
-                logger.warning(f"Failed to ping pool: {response.status_code}")
+            if response.status_code == 200:
+                logger.debug(f"Successfully pinged pool (host_id: {self.host_id})")
+            elif response.status_code == 404:
+                logger.warning(f"Host not found in pool (host_id: {self.host_id}), marking as disconnected")
+                self.is_connected = False
+                self.host_id = None
+            else:
+                logger.warning(f"Failed to ping pool: {response.status_code} - {response.text}")
                 
         except Exception as e:
             logger.error(f"Error pinging pool: {e}")
+            # Don't disconnect on network errors, just log and retry later
 
     def start_background_threads(self):
         """Start background threads for connection management and work polling"""
@@ -287,10 +439,18 @@ class LocalClient:
     def _connection_loop(self):
         """Background thread for maintaining connection"""
         while self.running:
-            if not self.is_connected and any(model.enabled for model in self.models.values()):
-                if self.config.get('auto_connect', False):
-                    logger.info("Attempting to reconnect to pool...")
-                    self.connect_to_pool()
+            # Check if we should be connected but aren't
+            should_be_connected = any(model.enabled for model in self.models.values())
+            
+            if should_be_connected and not self.is_connected:
+                logger.info("Attempting to connect to pool...")
+                if self.connect_to_pool():
+                    logger.info("Successfully reconnected to pool")
+                else:
+                    logger.warning("Failed to reconnect, will retry in 30 seconds")
+                    time.sleep(30)
+                    continue
+            
             time.sleep(60)  # Check connection every minute
 
     def _status_loop(self):
@@ -523,18 +683,24 @@ def api_models():
         model_name: asdict(model) for model_name, model in client.models.items()
     })
 
-@app.route('/api/models/<model_name>/toggle', methods=['POST'])
+@app.route('/api/models/<path:model_name>/toggle', methods=['POST'])
 def toggle_model(model_name):
     """Toggle model enabled state"""
+    # URL decode the model name
+    model_name = unquote(model_name)
+    
     if model_name in client.models:
         client.models[model_name].enabled = not client.models[model_name].enabled
         logger.info(f"Model {model_name} {'enabled' if client.models[model_name].enabled else 'disabled'}")
         return jsonify({'success': True, 'enabled': client.models[model_name].enabled})
     return jsonify({'success': False, 'error': 'Model not found'}), 404
 
-@app.route('/api/models/<model_name>/config', methods=['POST'])
+@app.route('/api/models/<path:model_name>/config', methods=['POST'])
 def update_model_config(model_name):
     """Update model configuration"""
+    # URL decode the model name
+    model_name = unquote(model_name)
+    
     if model_name not in client.models:
         return jsonify({'success': False, 'error': 'Model not found'}), 404
     
@@ -614,6 +780,197 @@ def status():
         'running': client.running,
         'enabled_models': [name for name, model in client.models.items() if model.enabled]
     })
+
+# Additional missing API endpoints
+
+@app.route('/api/toggle_model', methods=['POST'])
+def api_toggle_model():
+    """Toggle model enabled state (alternative endpoint)"""
+    data = request.get_json()
+    model_name = data.get('model_name')
+    
+    if model_name in client.models:
+        client.models[model_name].enabled = not client.models[model_name].enabled
+        logger.info(f"Model {model_name} {'enabled' if client.models[model_name].enabled else 'disabled'}")
+        return jsonify({'success': True, 'enabled': client.models[model_name].enabled})
+    return jsonify({'success': False, 'error': 'Model not found'}), 404
+
+@app.route('/api/update_model', methods=['POST'])
+def api_update_model():
+    """Update model configuration (alternative endpoint)"""
+    data = request.get_json()
+    model_name = data.get('model_name')
+    
+    if model_name not in client.models:
+        return jsonify({'success': False, 'error': 'Model not found'}), 404
+    
+    model = client.models[model_name]
+    
+    # Update configurable fields
+    if 'max_concurrent' in data:
+        model.max_concurrent = max(1, min(10, int(data['max_concurrent'])))
+    if 'context_length' in data:
+        model.context_length = max(512, min(32768, int(data['context_length'])))
+    if 'supports_embedding' in data:
+        model.supports_embedding = bool(data['supports_embedding'])
+    if 'supports_vision' in data:
+        model.supports_vision = bool(data['supports_vision'])
+    if 'supports_audio' in data:
+        model.supports_audio = bool(data['supports_audio'])
+    if 'enabled' in data:
+        model.enabled = bool(data['enabled'])
+    
+    logger.info(f"Updated config for model {model_name}")
+    return jsonify({'success': True})
+
+@app.route('/api/save_config', methods=['POST'])
+def api_save_config():
+    """Save configuration (alternative endpoint)"""
+    data = request.get_json()
+    
+    # Update configuration
+    if 'andy_api_url' in data:
+        client.config['andy_api_url'] = data['andy_api_url']
+    if 'ollama_url' in data:
+        client.config['ollama_url'] = data['ollama_url']
+    if 'auto_connect' in data:
+        client.config['auto_connect'] = bool(data['auto_connect'])
+    if 'max_vram_gb' in data:
+        client.config['max_vram_gb'] = max(0, float(data['max_vram_gb']))
+    if 'report_interval' in data:
+        client.config['report_interval'] = max(10, int(data['report_interval']))
+    if 'client_name' in data:
+        client.config['client_name'] = data['client_name']
+    
+    client.save_config()
+    logger.info("Configuration saved")
+    return jsonify({'success': True})
+
+@app.route('/api/metrics_data')
+def api_metrics_data():
+    """Get metrics data for charts and monitoring"""
+    hours = request.args.get('hours', '24', type=int)
+    
+    try:
+        # Get request history from database
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        # Get recent requests
+        cursor.execute('''
+            SELECT timestamp, model_name, request_type, tokens, response_time, success
+            FROM requests 
+            WHERE timestamp > datetime('now', '-{} hours')
+            ORDER BY timestamp DESC
+        '''.format(hours))
+        
+        requests_data = cursor.fetchall()
+        conn.close()
+        
+        # Calculate metrics
+        total_requests = len(requests_data)
+        successful_requests = sum(1 for r in requests_data if r[5])  # success column
+        failed_requests = total_requests - successful_requests
+        
+        # Calculate average response time
+        response_times = [r[4] for r in requests_data if r[4] > 0]  # response_time column
+        avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+        
+        # Get system info
+        cpu_percent = 0
+        memory_percent = 0
+        memory_used_gb = 0
+        memory_total_gb = 0
+        disk_percent = 0
+        disk_used_gb = 0
+        disk_total_gb = 0
+        
+        if PSUTIL_AVAILABLE:
+            cpu_percent = psutil.cpu_percent()
+            memory = psutil.virtual_memory()
+            disk = psutil.disk_usage('/')
+            memory_percent = memory.percent
+            memory_used_gb = memory.used / (1024**3)
+            memory_total_gb = memory.total / (1024**3)
+            disk_percent = (disk.used / disk.total) * 100
+            disk_used_gb = disk.used / (1024**3)
+            disk_total_gb = disk.total / (1024**3)
+        
+        # GPU info (basic, would need specific libraries for detailed info)
+        gpu_info = "N/A"
+        if GPUTIL_AVAILABLE:
+            try:
+                gpus = GPUtil.getGPUs()
+                if gpus:
+                    gpu = gpus[0]
+                    gpu_info = f"{gpu.name} - {gpu.memoryUsed}MB/{gpu.memoryTotal}MB"
+            except Exception:
+                pass
+        
+        metrics = {
+            'system_metrics': {
+                'cpu_percent': cpu_percent,
+                'memory_percent': memory_percent,
+                'memory_used_gb': memory_used_gb,
+                'memory_total_gb': memory_total_gb,
+                'disk_percent': disk_percent,
+                'disk_used_gb': disk_used_gb,
+                'disk_total_gb': disk_total_gb,
+                'gpu_info': gpu_info
+            },
+            'request_metrics': {
+                'total_requests': total_requests,
+                'successful_requests': successful_requests,
+                'failed_requests': failed_requests,
+                'success_rate': (successful_requests / total_requests * 100) if total_requests > 0 else 0,
+                'avg_response_time': avg_response_time
+            },
+            'connection_status': {
+                'is_connected': client.is_connected,
+                'host_id': client.host_id,
+                'enabled_models_count': sum(1 for model in client.models.values() if model.enabled),
+                'total_models_count': len(client.models)
+            },
+            'uptime': {
+                'start_time': client.stats.uptime_start.isoformat(),
+                'uptime_seconds': (datetime.now() - client.stats.uptime_start).total_seconds()
+            }
+        }
+        
+        return jsonify(metrics)
+        
+    except Exception as e:
+        logger.error(f"Error getting metrics data: {e}")
+        # Return basic metrics even if database fails
+        return jsonify({
+            'system_metrics': {
+                'cpu_percent': 0,
+                'memory_percent': 0,
+                'memory_used_gb': 0,
+                'memory_total_gb': 0,
+                'disk_percent': 0,
+                'disk_used_gb': 0,
+                'disk_total_gb': 0,
+                'gpu_info': "N/A"
+            },
+            'request_metrics': {
+                'total_requests': client.stats.total_requests,
+                'successful_requests': client.stats.successful_requests,
+                'failed_requests': client.stats.failed_requests,
+                'success_rate': 0,
+                'avg_response_time': 0
+            },
+            'connection_status': {
+                'is_connected': client.is_connected,
+                'host_id': client.host_id,
+                'enabled_models_count': sum(1 for model in client.models.values() if model.enabled),
+                'total_models_count': len(client.models)
+            },
+            'uptime': {
+                'start_time': client.stats.uptime_start.isoformat(),
+                'uptime_seconds': (datetime.now() - client.stats.uptime_start).total_seconds()
+            }
+        })
 
 if __name__ == '__main__':
     # Start background threads

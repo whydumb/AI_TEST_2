@@ -368,8 +368,8 @@ export async function log(input, response) { // Made async to support fetch
             break;
     }
 
-    // Check if logging for this type is enabled
-    if (!settingFlag && !settings.external_logging) { // Also check external_logging
+    // Check if logging for this type is enabled (either local or external)
+    if (!settingFlag && !settings.external_logging) {
         logCounts.skipped_disabled++;
         return;
     }
@@ -379,6 +379,7 @@ export async function log(input, response) { // Made async to support fetch
     const safeResponse = sanitizeForCsv(trimmedResponse); 
     const csvEntry = `${safeInput},${safeResponse}\n`;
 
+    // Perform external logging if enabled
     if (settings.external_logging) {
         try {
             const endpoint = `${EXTERNAL_LOGGING_URL}/${logType}-${subCategory}`;
@@ -401,7 +402,10 @@ export async function log(input, response) { // Made async to support fetch
         } catch (error) {
             console.error(`[Logger] Error sending log to external API:`, error);
         }
-    } else {
+    }
+
+    // Perform local logging if the setting is enabled (regardless of external logging)
+    if (settingFlag) {
         // Ensure directory and file exist
         if (!ensureLogFile(logFile, header)) return;
 
@@ -509,6 +513,7 @@ export async function logVision(conversationHistory, imageBuffer, response, visi
     // Use raw response string
     const rawResponse = trimmedResponse;
 
+    // Perform external logging if enabled
     if (settings.external_logging) {
         try {
             const endpoint = `${EXTERNAL_LOGGING_URL}/${logType}-vision`; // Vision logs now include type
@@ -532,7 +537,10 @@ export async function logVision(conversationHistory, imageBuffer, response, visi
         } catch (error) {
             console.error(`[Logger] Error sending vision log to external API:`, error);
         }
-    } else {
+    }
+
+    // Perform local logging if the setting is enabled (regardless of external logging)
+    if (settings.log_vision_data) {
         // Ensure directories exist
         if (!ensureDirectoryExistence(VISION_DATASET_DIR)) return;
         if (!ensureDirectoryExistence(VISION_IMAGES_DIR)) return;
