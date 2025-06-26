@@ -1,7 +1,7 @@
 {
   "andy_api_url": "https://mindcraft.riqvip.dev",
   "ollama_url": "http://localhost:11434",
-  "auto_connect": false,
+  "auto_connect": true,
   "max_vram_gb": 8.0,
   "report_interval": 30,
   "client_name": "Sweaterdog",

@@ -40,9 +40,9 @@ app = Flask(__name__)
 app.secret_key = 'andy-local-client-secret-key'
 
 # Configuration
-CONFIG_FILE = 'client_config.json'
-DB_FILE = 'local_client.db'
-DEFAULT_ANDY_API_URL = 'https://mindcraft.riqvip.dev'
+CONFIG_FILE = 'local_client/client_config.json'
+DB_FILE = 'local_client/local_client.db'
+DEFAULT_ANDY_API_URL = 'http://localhost:3002'
 DEFAULT_OLLAMA_URL = 'http://localhost:11434'
 
 @dataclass
@@ -138,16 +138,28 @@ class LocalClient:
                     if model_name in self.models: del self.models[model_name]
                 
                 if not any(m.enabled for m in self.models.values()) and self.models:
-                    first_model_name = next(iter(self.models.keys()))
-                    self.models[first_model_name].enabled = True
-                    logger.info(f"Auto-enabled model for testing: {first_model_name}")
+                    # Prefer enabling our test model if available
+                    target_model = "sweaterdog/andy-4:micro-q5_k_m"
+                    if target_model in self.models:
+                        self.models[target_model].enabled = True
+                        logger.info(f"Auto-enabled target model for testing: {target_model}")
+                    else:
+                        first_model_name = next(iter(self.models.keys()))
+                        self.models[first_model_name].enabled = True
+                        logger.info(f"Auto-enabled model for testing: {first_model_name}")
+                
+                # Also enable the embedding model for completeness
+                embed_model = "nomic-embed-text:latest"
+                if embed_model in self.models:
+                    self.models[embed_model].enabled = True
+                    logger.info(f"Auto-enabled embedding model: {embed_model}")
                 logger.info(f"Discovered {len(self.models)} models")
             else:
                 logger.error(f"Failed to discover models from Ollama: {response.status_code}")
         except Exception as e: logger.error(f"Error discovering models: {e}")
 
     def load_or_create_uuid(self):
-        uuid_file = 'client_uuid.txt'
+        uuid_file = 'local_client/client_uuid.txt'
         if os.path.exists(uuid_file):
             with open(uuid_file, 'r') as f: return f.read().strip()
         new_uuid = str(uuid.uuid4())
@@ -260,11 +272,23 @@ class LocalClient:
         logger.info("Background threads stopped")
 
     def _connection_loop(self):
+        logger.info(f"Connection loop started. Auto-connect: {self.config.get('auto_connect')}, Connected: {self.is_connected}")
+        # Attempt to connect immediately on startup
+        if self.config.get('auto_connect') and not self.is_connected:
+            logger.info("Auto-connect is ON. Attempting initial connection to pool...")
+            try:
+                self.connect_to_pool()
+            except Exception as e:
+                logger.error(f"Error during initial connection attempt: {e}")
+        
         while self.running:
             if self.config.get('auto_connect') and not self.is_connected:
-                logger.info("Auto-connect is ON. Attempting to connect to pool...")
-                self.connect_to_pool()
-            time.sleep(60)
+                logger.info("Auto-connect is ON. Attempting to reconnect to pool...")
+                try:
+                    self.connect_to_pool()
+                except Exception as e:
+                    logger.error(f"Error during reconnection attempt: {e}")
+            time.sleep(30)  # Check more frequently
 
     def _status_loop(self):
         while self.running:
@@ -272,64 +296,121 @@ class LocalClient:
             time.sleep(self.config.get('report_interval', 30))
 
     def _work_polling_loop(self):
+        logger.info("Work polling thread started")
         while self.running:
             if self.is_connected and self.host_id:
                 try:
+                    logger.info("Starting new polling cycle.")
                     enabled_models = [model.name for model in self.models.values() if model.enabled]
                     if not enabled_models:
+                        logger.info("No enabled models, sleeping...")
                         time.sleep(10)
                         continue
                     
-                    payload = {"host_id": self.host_id, "models": enabled_models}
-                    response = requests.post(f"{self.config['andy_api_url']}/api/andy/check_for_work", json=payload, timeout=10)
+                    logger.info(f"Polling for work with models: {enabled_models}")
+                    payload = {"host_id": self.host_id, "models": enabled_models, "timeout": 30}
                     
-                    if response.status_code == 200 and response.json().get('work_id'):
-                        work_data = response.json()
-                        logger.info(f"Received work: {work_data['work_id']} for model {work_data.get('model')}")
-                        threading.Thread(target=self.process_work, args=(work_data['work_id'], work_data)).start()
+                    logger.info(f"Sending POST to /api/andy/poll_for_work with payload: {payload}")
+                    response = requests.post(f"{self.config['andy_api_url']}/api/andy/poll_for_work", json=payload, timeout=35)
+                    
+                    logger.info(f"Poll response: {response.status_code}")
+                    if response.status_code == 200:
+                        result = response.json()
+                        if result.get('has_work') and result.get('work_item'):
+                            work_data = result['work_item']
+                            work_id = work_data.get('work_id')
+                            logger.info(f"Received work: {work_id} for model {work_data.get('model')}")
+                            threading.Thread(target=self.process_work, args=(work_id, work_data)).start()
+                        else:
+                            logger.info("No work available")
                     elif response.status_code == 404:
                         logger.warning("Host not registered, marking as disconnected.")
                         self.is_connected = False
                         self.host_id = None
-                except requests.exceptions.RequestException: pass
-                except Exception as e: logger.error(f"Work polling error: {e}")
-                time.sleep(3)
+                except requests.exceptions.RequestException as e: 
+                    logger.error(f"Polling request exception: {e}", exc_info=True)
+                except Exception as e: 
+                    logger.error(f"Work polling error: {e}", exc_info=True)
+                    time.sleep(5)  # Wait a bit on errors
             else:
+                logger.info(f"Not connected or no host_id. Connected: {self.is_connected}, Host ID: {self.host_id}")
                 time.sleep(5)
 
     def process_work(self, work_id: str, work_data: dict):
+        logger.info(f"--- Starting to process work {work_id} ---")
         try:
             model = work_data['model']
             if model not in self.models or not self.models[model].enabled:
+                logger.error(f"Model {model} not available or not enabled for work {work_id}.")
                 self.submit_work_error(work_id, f"Model {model} not available")
                 return
             
-            ollama_payload = {"model": model, "messages": work_data['messages'], **work_data.get('params', {})}
+            work_type = work_data.get('work_type', 'chat')
             start_time = time.time()
-            response = requests.post(f"{self.config['ollama_url']}/api/chat", json=ollama_payload, timeout=120)
-            response_time = time.time() - start_time
             
-            if response.status_code == 200:
-                self.submit_work_result(work_id, response.json())
-                self.log_request(model, 'chat', 0, response_time, True)
+            logger.info(f"Processing work {work_id} of type '{work_type}' for model '{model}'.")
+
+            if work_type == 'embedding':
+                # Handle embedding requests
+                ollama_payload = {
+                    "model": model, 
+                    "prompt": work_data.get('input', ''),
+                }
+                logger.info(f"Sending embedding request to Ollama for work {work_id}: {ollama_payload}")
+                response = requests.post(f"{self.config['ollama_url']}/api/embeddings", json=ollama_payload, timeout=120)
             else:
-                self.submit_work_error(work_id, f"Ollama request failed: {response.status_code}")
-                self.log_request(model, 'chat', 0, response_time, False)
+                # Handle chat requests (default)
+                ollama_payload = {
+                    "model": model, 
+                    "messages": work_data['messages'], 
+                    "stream": False,  # Ensure single JSON response
+                    **work_data.get('params', {})
+                }
+                logger.info(f"Sending chat request to Ollama for work {work_id}: {ollama_payload}")
+                response = requests.post(f"{self.config['ollama_url']}/api/chat", json=ollama_payload, timeout=120)
+            
+            response_time = time.time() - start_time
+            logger.info(f"Ollama request for work {work_id} completed in {response_time:.2f}s with status {response.status_code}.")
+
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"Ollama response for work {work_id}: {result}")
+                self.submit_work_result(work_id, result)
+                tokens = result.get('eval_count', 0) if work_type == 'chat' else 0
+                self.log_request(model, work_type, tokens, response_time, True)
+            else:
+                error_msg = f"Ollama request failed: {response.status_code} - {response.text}"
+                logger.error(f"Ollama error for work {work_id}: {error_msg}")
+                self.submit_work_error(work_id, error_msg)
+                self.log_request(model, work_type, 0, response_time, False)
         except Exception as e:
-            logger.error(f"Error processing work {work_id}: {e}")
+            logger.error(f"Error processing work {work_id}: {e}", exc_info=True)
             self.submit_work_error(work_id, str(e))
+        logger.info(f"--- Finished processing work {work_id} ---")
 
     def submit_work_result(self, work_id: str, result: dict):
+        logger.info(f"Submitting result for work {work_id}...")
         try:
-            requests.post(f"{self.config['andy_api_url']}/api/andy/submit_work_result", json={"work_id": work_id, "result": result}, timeout=10)
-            logger.info(f"Work completed: {work_id}")
-        except Exception as e: logger.error(f"Error submitting work result: {e}")
+            payload = {"work_id": work_id, "result": result}
+            response = requests.post(f"{self.config['andy_api_url']}/api/andy/submit_work_result", json=payload, timeout=10)
+            if response.status_code == 200:
+                logger.info(f"Successfully submitted result for work {work_id}.")
+            else:
+                logger.error(f"Failed to submit result for work {work_id}. Status: {response.status_code}, Response: {response.text}")
+        except Exception as e: 
+            logger.error(f"Error submitting work result for {work_id}: {e}", exc_info=True)
 
     def submit_work_error(self, work_id: str, error: str):
+        logger.info(f"Submitting error for work {work_id}: {error}")
         try:
-            requests.post(f"{self.config['andy_api_url']}/api/andy/submit_work_result", json={"work_id": work_id, "error": error}, timeout=10)
-            logger.info(f"Work error submitted: {work_id}")
-        except Exception as e: logger.error(f"Error submitting work error: {e}")
+            payload = {"work_id": work_id, "error": error}
+            response = requests.post(f"{self.config['andy_api_url']}/api/andy/submit_work_result", json=payload, timeout=10)
+            if response.status_code == 200:
+                logger.info(f"Successfully submitted error for work {work_id}.")
+            else:
+                logger.error(f"Failed to submit error for work {work_id}. Status: {response.status_code}, Response: {response.text}")
+        except Exception as e: 
+            logger.error(f"Error submitting work error for {work_id}: {e}", exc_info=True)
 
     def log_request(self, model_name: str, request_type: str, tokens: int, response_time: float, success: bool):
         try:
