@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { toSinglePrompt, strictFormat } from '../utils/text.js';
-import { getKey, getOptionalKey } from '../utils/keys.js';
+import { getKey } from '../utils/keys.js';
 import { log, logVision } from '../../logger.js';
 
 export class Vertex {
