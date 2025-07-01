@@ -9,6 +9,7 @@ scratch.js
 bots/**/action-code/**
 bots/**/
 keys.json
+gen-lang-client***.json
 services/viaproxy/jars/**
 services/viaproxy/logs/**
 services/viaproxy/plugins/**

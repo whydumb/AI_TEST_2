@@ -10,7 +10,7 @@ const settings = {
     "mindserver_port": 8080,
     
     // the base profile is shared by all bots for default prompts/examples/modes
-    "base_profile": "./profiles/defaults/personality.json", // also see creative.json, god_mode.json, and personality.json is really fun.
+    "base_profile": "./profiles/defaults/_default.json", // also see creative.json, god_mode.json, and personality.json is really fun.
     "profiles": [
         "./andy.json",
         // "./profiles/gpt.json",
@@ -21,6 +21,7 @@ const settings = {
         // "./profiles/grok.json",
         // "./profiles/mistral.json",
         // "./profiles/deepseek.json",
+        // "./profiles/vertex.json",
         // "./profiles/andy-4.json",
 
         // using more than 1 profile requires you to /msg each bot indivually
