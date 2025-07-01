@@ -2,6 +2,8 @@
     "OPENAI_API_KEY": "",
     "OPENAI_ORG_ID": "",
     "GEMINI_API_KEY": "",
+    "VERTEX_PROJECT_ID": "your-google-cloud-project-id",
+    "VERTEX_LOCATION": "us-central1",
     "ANTHROPIC_API_KEY": "",
     "REPLICATE_API_KEY": "",
     "GROQCLOUD_API_KEY": "",
