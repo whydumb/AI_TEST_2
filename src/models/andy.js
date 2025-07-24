@@ -10,7 +10,7 @@ export class Andy {
         
         // Andy API configuration
         let config = {
-            baseURL: url || 'https://mindcraft.riqvip.dev/api/andy/v1',
+            baseURL: url || 'https://mindcraft-ce.com/api/andy/v1',
             apiKey: getKey('ANDY_API_KEY') || 'no-key-needed' // Can work without key but with limits
         };
         
