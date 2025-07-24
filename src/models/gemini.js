@@ -49,13 +49,20 @@ export class Gemini {
         }
 
         // Always enable thought summaries
-        let config = {
-            ...this.params,
-            thinkingConfig: {
-                includeThoughts: true,
-                ...(this.params?.thinkingConfig || {})
-            }
-        };
+        try: {
+                let config = {
+                ...this.params,
+                thinkingConfig: {
+                    includeThoughts: true,
+                    ...(this.params?.thinkingConfig || {})
+                }
+            };
+        } catch (err): {
+            let config = {
+                ...this.params,
+                }
+            };
+        }
 
         // Add safety settings
         if (this.safetySettings) {
