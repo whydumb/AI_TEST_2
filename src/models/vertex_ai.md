@@ -89,10 +89,11 @@ gcloud ai models list --region=us-central1
 | `gemini-2.5-flash` | Latest flash model | General purpose, fast responses |
 | `gemini-2.0-flash` | Fast, efficient model | Quick responses, high throughput |
 | ------------------ | 3rd Party Models | --------------------------------- |
-| `claude-opus-4` | Best Anthropic Mode | Extremely complex reasoning, 0 shot game completion |
-| `claude-sonnet-4` | Latest Anthropic Model | Coding models, reasoning |
-| `claude-sonnet-4` | Latest Anthropic Model | Coding models, reasoning |
-| `llama-4-maverick-17b-128e-instruct-maas` | Latest Meta Model | Visual Tasks, Diverse environments |
+| `claude-opus-4` | Best Anthropic Model | Extremely complex reasoning, 0 shot game completion* |
+| `claude-sonnet-4` | Latest Anthropic Model | Coding model, reasoning |
+| `llama-4-maverick-17b-128e-instruct-maas` | Latest Meta Model | Visual Tasks, Diverse environments* |
+
+##### *Has not been tested
 
 **Vertex AI has many more models than Gemini Models**
 To see the full list, [go to this page](https://console.cloud.google.com/vertex-ai/model-garden)
@@ -151,48 +152,18 @@ gcloud compute project-info describe --project=YOUR_PROJECT_ID
 # https://console.cloud.google.com/iam-admin/quotas
 ```
 
-## Testing Your Setup
-
-You can test your Vertex AI setup with this simple script:
-
-```javascript
-import { GoogleGenAI } from '@google/genai';
-
-const ai = new GoogleGenAI({
-  vertexai: true,
-  project: 'your-project-id',
-  location: 'us-central1',
-});
-
-async function test() {
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
-      contents: 'Hello, Vertex AI!',
-    });
-    console.log('Success:', response.text);
-  } catch (error) {
-    console.error('Error:', error);
-  }
-}
-
-test();
-```
-
 ## Security Best Practices
 
-1. **Never commit service account keys to version control**
+1. **Monitor API usage and costs**
 2. **Use Application Default Credentials when possible**
 3. **Limit permissions to only what's needed**
-4. **Regularly rotate credentials**
-5. **Monitor API usage and costs**
 
 ## Cost Management
 
 - Monitor your usage in the Google Cloud Console
 - Set up billing alerts
 - Use quotas to limit API usage
-- Consider using smaller models for development/testing
+- Consider using smaller models for development/testing such as 2.5-flash-lite
 
 ## Environment Variables (Alternative Setup)
 
@@ -209,6 +180,3 @@ export GOOGLE_GENAI_USE_VERTEXAI=true
 - [Google Cloud Vertex AI Documentation](https://cloud.google.com/vertex-ai/docs)
 - [Google Gen AI SDK Documentation](https://ai.google.dev/api/generate-content)
 - [Google Cloud Support](https://cloud.google.com/support)
-
-
-
