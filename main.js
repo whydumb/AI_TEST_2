@@ -4,7 +4,7 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { createMindServer } from './src/server/mind_server.js';
 import { mainProxy } from './src/process/main_proxy.js';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import { initSTT } from './src/process/stt_process.js';
 
 function parseArguments() {
@@ -40,6 +40,22 @@ async function main() {
     const profiles = getProfiles(args);
     console.log(profiles);
     const { load_memory, init_message } = settings;
+
+    if (process.env.AGENT_NAME && profiles.length === 1) {
+        const profilePath = profiles[0];
+        try {
+            let profileContent = readFileSync(profilePath, 'utf8');
+            let agent_json = JSON.parse(profileContent);
+
+            const newName = process.env.AGENT_NAME;
+            // replace "{agent_json.name}" with the new name from the file directly without json stuff
+            profileContent = profileContent.replace(agent_json.name, newName);
+            // now update the file
+            writeFileSync(profilePath, profileContent, 'utf8');
+        } catch (e) {
+            console.error(`Failed to read or parse profile file at ${profilePath}:`, e);
+        }
+    }
     
     for (let i=0; i<profiles.length; i++) {
         const agent_process = new AgentProcess();
