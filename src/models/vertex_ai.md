@@ -85,8 +85,8 @@ gcloud ai models list --region=us-central1
 
 | Model | Description | Use Case |
 |-------|-------------|----------|
-| `gemini-2.5-pro` | Stable production model | Complex reasoning, longer context |
-| `gemini-2.5-flash` | Latest pro model | General purpose, fast responses |
+| `gemini-2.5-pro` | Best production model | Complex reasoning, longer context |
+| `gemini-2.5-flash` | Latest flash model | General purpose, fast responses |
 | `gemini-2.0-flash` | Fast, efficient model | Quick responses, high throughput |
 | ------------------ | 3rd Party Models | --------------------------------- |
 | `claude-opus-4` | Best Anthropic Mode | Extremely complex reasoning, 0 shot game completion |
