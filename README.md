@@ -1,4 +1,4 @@
-<h1 align="center">mindcraft-ce</h1>
+<h1 align="center" href="https://www.mindcraft-ce.com">mindcraft-ce</h1>
 <h3 align="center">
   Mindcraft Community Edition 🧠⛏️
 </h3>
