@@ -12,10 +12,7 @@
   <img alt="Static Badge" src="https://img.shields.io/badge/mindcraft-ce-badge">
   <img alt="GitHub Release Date" src="https://img.shields.io/github/release-date/mindcraft-ce/mindcraft-ce">
   <img alt="GitHub commits since latest release" src="https://img.shields.io/github/commits-since/mindcraft-ce/mindcraft-ce/latest">
-  <!--
-    uh we can make this visible when there are more downloads
-    <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/mindcraft-ce/mindcraft-ce/total">
-  -->
+  <img alt="Discord" src="https://img.shields.io/discord/1382794682962153575?logo=discord&logoColor=%235865F2&label=discord&labelColor=black">
   <img alt="GitHub repo size" src="https://img.shields.io/github/repo-size/mindcraft-ce/mindcraft-ce">
 
 
