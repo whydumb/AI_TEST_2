@@ -79,7 +79,8 @@ const settings = {
     "log_normal_data": false, // Logs all inputs / outputs without reasoning or vision data
     "log_reasoning_data": false, // Logs only reasoning inputs / outputs
     "log_vision_data": false, // Logs only vision inputs / outputs
-    "external_logging": false, // Enable sending logs to a cloud API
+    // "external_logging": null, // Enable sending logs to a cloud API
+    // The setting for this is now stored in `.logging_consent`.
 
 }
 

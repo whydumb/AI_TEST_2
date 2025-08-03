@@ -8,6 +8,8 @@ import path from 'path'; // Needed for path operations
 // import fetch from 'node-fetch';
 
 // --- Configuration ---
+const loggingConsentPath = './.logging_consent';
+
 const LOGS_DIR = './logs';
 const VISION_DATASET_DIR = join(LOGS_DIR, 'vision_dataset'); // HuggingFace dataset format
 const VISION_IMAGES_DIR = join(VISION_DATASET_DIR, 'images'); // Images subdirectory
@@ -277,6 +279,24 @@ function printSummary() {
     console.log('='.repeat(60) + '\n');
 }
 
+function isExternalLoggingEnabled() {
+    if (existsSync(loggingConsentPath)) {
+        try {
+            contents = readFileSync(loggingConsentPath, 'utf-8');
+            const consent = JSON.parse(contents);
+            return consent && consent.consent === true;
+        } catch (error) {
+            console.error(`[Logger] Error reading logging consent file:`, error);
+            return false; // Default to false if there's an error
+        }
+    } else {
+        throw new Error(`[Logger] Logging consent file not found at ${loggingConsentPath}. Please create it with {"consent": true} to enable external logging.`);
+        // We throw an error here because the file should have been created at initialization.
+    }
+}
+
+const externalLoggingEnabled = isExternalLoggingEnabled();
+
 // --- Main Logging Function (for text-based input/output) ---
 export async function log(input, response) { // Made async to support fetch
     const trimmedInputStr = input ? (typeof input === 'string' ? input.trim() : JSON.stringify(input)) : "";
@@ -347,7 +367,7 @@ export async function log(input, response) { // Made async to support fetch
     }
 
     // Check if logging for this type is enabled (either local or external)
-    if (!settingFlag && !settings.external_logging) {
+    if (!settingFlag && !externalLoggingEnabled) {
         logCounts.skipped_disabled++;
         return;
     }
@@ -358,7 +378,7 @@ export async function log(input, response) { // Made async to support fetch
     const csvEntry = `${safeInput},${safeResponse}\n`;
 
     // Perform external logging if enabled
-    if (settings.external_logging) {
+    if (externalLoggingEnabled) {
         try {
             const endpoint = `${EXTERNAL_LOGGING_URL}/${logType === 'reasoning' ? 'reasoning-logs' : 'normal-logs'}`;
             const response = await fetch(endpoint, {
@@ -398,7 +418,7 @@ export async function log(input, response) { // Made async to support fetch
 
 // --- Enhanced Vision Logging Function for HuggingFace Dataset Format ---
 export async function logVision(conversationHistory, imageBuffer, response, visionMessage = null) { // Made async
-    if (!settings.log_vision_data && !settings.external_logging) {
+    if (!settings.log_vision_data && !externalLoggingEnabled) {
         logCounts.skipped_disabled++;
         return;
     }
@@ -487,7 +507,7 @@ export async function logVision(conversationHistory, imageBuffer, response, visi
     const rawResponse = trimmedResponse;
 
     // Perform external logging if enabled
-    if (settings.external_logging) {
+    if (externalLoggingEnabled) {
         try {
             const endpoint = `${EXTERNAL_LOGGING_URL}/${logType}-vision`; // Vision logs now include type
             const payload = {
@@ -571,18 +591,61 @@ function initializeCounts() {
 
     console.log(`[Logger] Initialized session-based log counts.`);
 
-    if (settings.external_logging) {
+    if (externalLoggingEnabled) {
         console.log('\n' + '='.repeat(60));
         console.log('EXTERNAL LOGGING ENABLED');
         console.log('Data will be sent to mindcraft-ce.com/api/log');
         console.log('The data will only be used to train future Andy models');
-        console.log('We only collect the messages you send to the agent');
-        console.log('And no other information.');
+        console.log('We collect all the messages you send to the agent');
+        console.log('and the responses it gives you, but everything is anonymized.');
+        console.log('These logs are publicly available for anyone to see.');
+        console.log('You can disable this by creating a file named `.logging_consent` and setting its content to `{"consent": false}`.');
         console.log('');
-        console.log('We recommend leaving this on to make Mindcraft-CE better!');
+        console.log('Leaving this on will help make Andy models better.');
         console.log('='.repeat(60) + '\n');
         // Send usernames to the server is now handled by the agent
     }
+}
+
+export function setupLogConsent() {
+    if (existsSync(loggingConsentPath)) {
+        // We don't need to do anything.
+        return;
+    }
+    // Prompt the user for consent.
+    console.log('To help us build smarter models like Andy-5, would you like to contribute your gameplay data for AI training?');
+    console.log('Here\'s what this means:');
+    console.log('- We record your ENTIRE in-game conversations with the bot.');
+    console.log('- This data is used to create PUBLIC datasets for training (e.g., on Hugging Face).');
+    console.log('- This helps us collect training data to improve future Andy models.');
+    console.log('- Your data is entirely anonymized.');
+    console.log('If you are of age 16 or younger, you must have parental consent, as required by GDPR.');
+    console.log('To request deletion of your data, please join the Discord server (linked in README) and file a support ticket.');
+    console.log('You can change this anytime by creating a file named `.logging_consent` and setting its content to `{"consent": false}`.');
+    console.log('Contribute to the future of Mindcraft-CE? [y/N]: ');
+    process.stdin.setEncoding('utf8');
+
+    const timeoutHandle = setTimeout(() => {
+        if (!process.stdin.isPaused()) {
+            console.log('No input received. Defaulting to no consent.');
+            writeFileSync(loggingConsentPath, JSON.stringify({ consent: false }, null, 2));
+            process.stdin.pause(); // Stop listening for input
+        }
+    }, 30000); // 30 seconds timeout
+
+    process.stdin.on('data', (data) => {
+        clearTimeout(timeoutHandle); // Prevent timeout from firing after input
+        const consent = data.trim().toLowerCase();
+        if (consent.startsWith('y')) {
+            writeFileSync(loggingConsentPath, JSON.stringify({ consent: true }, null, 2));
+            console.log('Thank you for your consent! Your data will help improve future models. You can change this anytime by editing the `.logging_consent` file.');
+        } else {
+            writeFileSync(loggingConsentPath, JSON.stringify({ consent: false }, null, 2));
+            console.log('You have opted out of data collection. You can change this anytime by editing the `.logging_consent` file.');
+        }
+        process.stdin.pause(); // Stop listening for input
+    });
+    
 }
 
 // Function to send usernames to the server
