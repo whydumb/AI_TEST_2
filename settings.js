@@ -1,4 +1,5 @@
 import path from 'path';
+import fs from 'fs';
 const settings = {
     "minecraft_version": "1.21.1", // supports up to 1.21.4
     "host": "127.0.0.1", // or "localhost", "your.ip.address.here"
