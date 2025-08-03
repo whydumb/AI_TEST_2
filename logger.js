@@ -613,16 +613,16 @@ export function setupLogConsent() {
     }
     return new Promise((resolve) => {
         // Prompt the user for consent.
+        console.log(' ============================== ')
         console.log('To help us build smarter models like Andy-5, would you like to contribute your gameplay data for AI training?');
         console.log('Here\'s what this means:');
         console.log('- We record your ENTIRE in-game conversations with the bot.');
         console.log('- This data is used to create PUBLIC datasets for training (e.g., on Hugging Face).');
         console.log('- This helps us collect training data to improve future Andy models.');
-        console.log('- Your data is entirely anonymized.');
         console.log('If you are of age 16 or younger, you must have parental consent, as required by GDPR.');
         console.log('To request deletion of your data, please join the Discord server (linked in README) and file a support ticket.');
         console.log('You can change this anytime by creating a file named `.logging_consent` and setting its content to `{"consent": false}`.');
-        console.log('Contribute to the future of Mindcraft-CE? [y/N]: ');
+        process.stdout.write('Contribute to the future of Mindcraft-CE? [y/N]: '); // Keeps the cursor on the same line
         process.stdin.setEncoding('utf8');
 
         const timeoutHandle = setTimeout(() => {
@@ -630,6 +630,7 @@ export function setupLogConsent() {
                 console.log('No input received. Defaulting to no consent.');
                 writeFileSync(loggingConsentPath, JSON.stringify({ consent: false }, null, 2));
                 process.stdin.pause(); // Stop listening for input
+                resolve();
             }
         }, 30000); // 30 seconds timeout
 
@@ -644,6 +645,7 @@ export function setupLogConsent() {
                 console.log('You have opted out of data collection. You can change this anytime by editing the `.logging_consent` file.');
             }
             process.stdin.pause(); // Stop listening for input
+            resolve();
         });
     });
 }

@@ -32,7 +32,9 @@ function getProfiles(args) {
 }
 
 async function main() {
-    setupLogConsent();
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    // wait for 1 second to ensure other modules are ready, avoiding cluttering the stdout and confusing the user.
+    await setupLogConsent();
     if (settings.host_mindserver) {
         const mindServer = createMindServer(settings.mindserver_port);
     }
