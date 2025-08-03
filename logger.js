@@ -282,7 +282,7 @@ function printSummary() {
 function isExternalLoggingEnabled() {
     if (existsSync(loggingConsentPath)) {
         try {
-            contents = readFileSync(loggingConsentPath, 'utf-8');
+            const contents = readFileSync(loggingConsentPath, 'utf-8');
             const consent = JSON.parse(contents);
             return consent && consent.consent === true;
         } catch (error) {
@@ -290,8 +290,7 @@ function isExternalLoggingEnabled() {
             return false; // Default to false if there's an error
         }
     } else {
-        throw new Error(`[Logger] Logging consent file not found at ${loggingConsentPath}. Please create it with {"consent": true} to enable external logging.`);
-        // We throw an error here because the file should have been created at initialization.
+        return false; // Default to false if the file doesn't exist - file should be handled by initialization anyway.
     }
 }
 
@@ -610,42 +609,43 @@ function initializeCounts() {
 export function setupLogConsent() {
     if (existsSync(loggingConsentPath)) {
         // We don't need to do anything.
-        return;
+        return Promise.resolve();
     }
-    // Prompt the user for consent.
-    console.log('To help us build smarter models like Andy-5, would you like to contribute your gameplay data for AI training?');
-    console.log('Here\'s what this means:');
-    console.log('- We record your ENTIRE in-game conversations with the bot.');
-    console.log('- This data is used to create PUBLIC datasets for training (e.g., on Hugging Face).');
-    console.log('- This helps us collect training data to improve future Andy models.');
-    console.log('- Your data is entirely anonymized.');
-    console.log('If you are of age 16 or younger, you must have parental consent, as required by GDPR.');
-    console.log('To request deletion of your data, please join the Discord server (linked in README) and file a support ticket.');
-    console.log('You can change this anytime by creating a file named `.logging_consent` and setting its content to `{"consent": false}`.');
-    console.log('Contribute to the future of Mindcraft-CE? [y/N]: ');
-    process.stdin.setEncoding('utf8');
+    return new Promise((resolve) => {
+        // Prompt the user for consent.
+        console.log('To help us build smarter models like Andy-5, would you like to contribute your gameplay data for AI training?');
+        console.log('Here\'s what this means:');
+        console.log('- We record your ENTIRE in-game conversations with the bot.');
+        console.log('- This data is used to create PUBLIC datasets for training (e.g., on Hugging Face).');
+        console.log('- This helps us collect training data to improve future Andy models.');
+        console.log('- Your data is entirely anonymized.');
+        console.log('If you are of age 16 or younger, you must have parental consent, as required by GDPR.');
+        console.log('To request deletion of your data, please join the Discord server (linked in README) and file a support ticket.');
+        console.log('You can change this anytime by creating a file named `.logging_consent` and setting its content to `{"consent": false}`.');
+        console.log('Contribute to the future of Mindcraft-CE? [y/N]: ');
+        process.stdin.setEncoding('utf8');
 
-    const timeoutHandle = setTimeout(() => {
-        if (!process.stdin.isPaused()) {
-            console.log('No input received. Defaulting to no consent.');
-            writeFileSync(loggingConsentPath, JSON.stringify({ consent: false }, null, 2));
+        const timeoutHandle = setTimeout(() => {
+            if (!process.stdin.isPaused()) {
+                console.log('No input received. Defaulting to no consent.');
+                writeFileSync(loggingConsentPath, JSON.stringify({ consent: false }, null, 2));
+                process.stdin.pause(); // Stop listening for input
+            }
+        }, 30000); // 30 seconds timeout
+
+        process.stdin.on('data', (data) => {
+            clearTimeout(timeoutHandle); // Prevent timeout from firing after input
+            const consent = data.trim().toLowerCase();
+            if (consent.startsWith('y')) {
+                writeFileSync(loggingConsentPath, JSON.stringify({ consent: true }, null, 2));
+                console.log('Thank you for your consent! Your data will help improve future models. You can change this anytime by editing the `.logging_consent` file.');
+            } else {
+                writeFileSync(loggingConsentPath, JSON.stringify({ consent: false }, null, 2));
+                console.log('You have opted out of data collection. You can change this anytime by editing the `.logging_consent` file.');
+            }
             process.stdin.pause(); // Stop listening for input
-        }
-    }, 30000); // 30 seconds timeout
-
-    process.stdin.on('data', (data) => {
-        clearTimeout(timeoutHandle); // Prevent timeout from firing after input
-        const consent = data.trim().toLowerCase();
-        if (consent.startsWith('y')) {
-            writeFileSync(loggingConsentPath, JSON.stringify({ consent: true }, null, 2));
-            console.log('Thank you for your consent! Your data will help improve future models. You can change this anytime by editing the `.logging_consent` file.');
-        } else {
-            writeFileSync(loggingConsentPath, JSON.stringify({ consent: false }, null, 2));
-            console.log('You have opted out of data collection. You can change this anytime by editing the `.logging_consent` file.');
-        }
-        process.stdin.pause(); // Stop listening for input
+        });
     });
-    
 }
 
 // Function to send usernames to the server
