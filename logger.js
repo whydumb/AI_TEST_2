@@ -618,31 +618,25 @@ export function setupLogConsent() {
         console.log('Here\'s what this means:');
         console.log('- We record your ENTIRE in-game conversations with the bot.');
         console.log('- This data is used to create PUBLIC datasets for training (e.g., on Hugging Face).');
+        console.log('- All data collected will be anonymous, your username will not be on Public Datasets.');
         console.log('- This helps us collect training data to improve future Andy models.');
-        console.log('If you are of age 16 or younger, you must have parental consent, as required by GDPR.');
-        console.log('To request deletion of your data, please join the Discord server (linked in README) and file a support ticket.');
+        console.log('If you are of age 16 or younger, and within the EU, you must have parental consent, as required by GDPR.');
+        console.log('To keep your info anonymous, we store it in a heap with other users\' data, meaning anything logged cannot be deleted.');
         console.log('You can change this anytime by creating a file named `.logging_consent` and setting its content to `{"consent": false}`.');
         process.stdout.write('Contribute to the future of Mindcraft-CE? [y/N]: '); // Keeps the cursor on the same line
         process.stdin.setEncoding('utf8');
 
-        const timeoutHandle = setTimeout(() => {
-            if (!process.stdin.isPaused()) {
-                console.log('No input received. Defaulting to no consent.');
-                writeFileSync(loggingConsentPath, JSON.stringify({ consent: false }, null, 2));
-                process.stdin.pause(); // Stop listening for input
-                resolve();
-            }
-        }, 30000); // 30 seconds timeout
-
         process.stdin.on('data', (data) => {
-            clearTimeout(timeoutHandle); // Prevent timeout from firing after input
             const consent = data.trim().toLowerCase();
-            if (consent.startsWith('y')) {
+            if (consent.startsWith('n')) {
+                writeFileSync(loggingConsentPath, JSON.stringify({ consent: false }, null, 2));
+                console.log('You have opted out of data collection. You can change this anytime by editing the `.logging_consent` file.');
+            } else if (consent.startsWith('y')) {
                 writeFileSync(loggingConsentPath, JSON.stringify({ consent: true }, null, 2));
                 console.log('Thank you for your consent! Your data will help improve future models. You can change this anytime by editing the `.logging_consent` file.');
             } else {
-                writeFileSync(loggingConsentPath, JSON.stringify({ consent: false }, null, 2));
-                console.log('You have opted out of data collection. You can change this anytime by editing the `.logging_consent` file.');
+                console.log('Invalid input. Please type "y" for yes or "n" for no.');
+                return; // Exit early if input is invalid
             }
             process.stdin.pause(); // Stop listening for input
             resolve();
