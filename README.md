@@ -33,6 +33,8 @@
 > [!Note]
 > This fork of Mindcraft is maintained by the community and includes features not present in [the official repo](https://github.com/kolbytn/mindcraft).
 
+<b>The open-source platform for crafting intelligent, collaborative agents in Minecraft using Large Language Models.</b>
+
 ### mindcraft vs. mindcraft-ce
 
 | Feature | mindcraft (Original) | mindcraft-ce (Community Edition) |
