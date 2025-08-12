@@ -1,6 +1,6 @@
 {
     "name": "andy",
 
-    "model": "pollinations/openai"
+    "model": "andy/auto"
 
 }
