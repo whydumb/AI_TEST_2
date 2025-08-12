@@ -128,7 +128,7 @@ You can configure the agent's name, model, and prompts in their profile like `an
 | `glhf.chat` | `GHLF_API_KEY` | `glhf/hf:meta-llama/Llama-3.1-405B-Instruct` | [docs](https://glhf.chat/user-settings/api) |
 | `hyperbolic` | `HYPERBOLIC_API_KEY` | `hyperbolic/deepseek-ai/DeepSeek-V3` | [docs](https://docs.hyperbolic.xyz/docs/getting-started) |
 | `pollinations` | n/a | `pollinations/openai-large` | [docs](https://github.com/pollinations/pollinations/blob/master/APIDOCS.md) |
-| `andy API` | `ANDY_API_KEY` (optional) | `andy/sweaterdog/andy-4` | [docs](https://github.com/pollinations/pollinations/blob/master/APIDOCS.md) |
+| `andy API` | `ANDY_API_KEY` (optional) | `andy/auto` (depends on what models are available) | [docs](https://andy.mindcraft-ce.com/andy-docs) |
 | `vllm` | n/a | `vllm/llama3` | n/a |
 
 If you use Ollama, to install the models used by default (generation and embedding), execute the following terminal command:
@@ -312,9 +312,44 @@ To convert, run `python convert.py`, if you get a dependency error, ensure you a
 
 For setting up vision datasets, run `convert.py` with the flag of `--vision`, this will do the same thing as the rest of the conversions, but change the format to an image-friendly way. But it should be known that the formatted image data is **not yet prepared** for training, we are still working out how to have the data effectively be used by Unsloth.
 
+## Andy API - Distributed AI Compute Pool
+
+The **Andy API** is a revolutionary distributed compute pool that allows users to share their AI resources and access models from around the world. By connecting to the Andy API network, you can:
+
+- **Contribute Resources**: Share your local AI models (Ollama, LM Studio, etc.) or API quotas (OpenAI, Anthropic, etc.) with the community
+- **Access Diverse Models**: Use models from other contributors without needing to host them locally
+- **Scale Dynamically**: Automatically distribute workload across available compute resources
+
+### Andy API Local Client
+
+The [**Andy API Local Client**](https://github.com/mindcraft-ce/Andy-API) is a modern web-based interface that makes it easy to connect any OpenAI-compatible endpoint to the distributed compute pool:
+
+🔗 **Repository**: [https://github.com/mindcraft-ce/Andy-API](https://github.com/mindcraft-ce/Andy-API)
+
+**Key Features**:
+- **Universal Compatibility**: Works with Ollama, OpenAI API, LM Studio, vLLM, and any OpenAI-compatible endpoint
+- **Web Dashboard**: Real-time monitoring, model management, and performance analytics
+- **Easy Setup**: Simple installation with automatic model discovery
+- **Resource Sharing**: Contribute your compute power or API quotas to help the community
+
+**Quick Start**:
+```bash
+# Clone the Andy API Local Client
+git clone https://github.com/mindcraft-ce/Andy-API.git
+cd Andy-API
+
+# Install and run
+pip install -r requirements.txt
+python launch.py
+
+# Open http://localhost:5000 in your browser
+```
+
+By running the Andy API Local Client alongside mindcraft-ce, you can contribute to the distributed AI ecosystem while using the best available models for your Minecraft agents!
+
 ## Tasks
 
-Bot performance can be roughly evaluated with Tasks. Tasks automatically intialize bots with a goal to aquire specific items or construct predefined buildings, and remove the bot once the goal is achieved.
+Bot performance can be roughly evaluated with Tasks. Tasks automatically initialize bots with a goal to acquire specific items or construct predefined buildings, and remove the bot once the goal is achieved.
 
 To run tasks, you need python, pip, and optionally conda. You can then install dependencies with `pip install -r requirements.txt`. 
 
