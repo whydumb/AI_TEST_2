@@ -18,6 +18,7 @@ services/viaproxy/saves.json
 services/viaproxy/viaproxy.yml
 services/mc
 tmp/
+tests/
 src/server/analytics
 wandb/
 experiments/
