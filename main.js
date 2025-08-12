@@ -6,6 +6,7 @@ import { createMindServer } from './src/server/mind_server.js';
 import { mainProxy } from './src/process/main_proxy.js';
 import { readFileSync, writeFileSync } from 'fs';
 import { initSTT } from './src/process/stt_process.js';
+import { setupLogConsent } from './logger.js';
 
 function parseArguments() {
     return yargs(hideBin(process.argv))
@@ -31,6 +32,9 @@ function getProfiles(args) {
 }
 
 async function main() {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    // wait for 1 second to ensure other modules are ready, avoiding cluttering the stdout and confusing the user.
+    await setupLogConsent();
     if (settings.host_mindserver) {
         const mindServer = createMindServer(settings.mindserver_port);
     }

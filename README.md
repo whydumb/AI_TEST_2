@@ -1,4 +1,4 @@
-<h1 align="center">mindcraft-ce</h1>
+<a href="https://www.mindcraft-ce.com"><h1 align="center">mindcraft-ce</h1></a>
 <h3 align="center">
   Mindcraft Community Edition 🧠⛏️
 </h3>
@@ -12,10 +12,7 @@
   <img alt="Static Badge" src="https://img.shields.io/badge/mindcraft-ce-badge">
   <img alt="GitHub Release Date" src="https://img.shields.io/github/release-date/mindcraft-ce/mindcraft-ce">
   <img alt="GitHub commits since latest release" src="https://img.shields.io/github/commits-since/mindcraft-ce/mindcraft-ce/latest">
-  <!--
-    uh we can make this visible when there are more downloads
-    <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/mindcraft-ce/mindcraft-ce/total">
-  -->
+  <img alt="Discord" src="https://img.shields.io/discord/1382794682962153575?logo=discord&logoColor=%235865F2&label=discord&labelColor=black">
   <img alt="GitHub repo size" src="https://img.shields.io/github/repo-size/mindcraft-ce/mindcraft-ce">
 
 
@@ -35,6 +32,8 @@
 
 > [!Note]
 > This fork of Mindcraft is maintained by the community and includes features not present in [the official repo](https://github.com/kolbytn/mindcraft).
+
+<b>The open-source platform for crafting intelligent, collaborative agents in Minecraft using Large Language Models.</b>
 
 ### mindcraft vs. mindcraft-ce
 
