@@ -90,6 +90,7 @@ export class Andy {
 
         let res = null;
         let usage = null;
+        let model = null;
         try {
             console.log('Awaiting Andy API response from model', this.model_name);
 
@@ -98,8 +99,11 @@ export class Andy {
                 throw new Error('Context length exceeded');
             }
             console.log('Received.');
+
+
             res = completion.choices[0].message.content;
-            
+            model = completion.model;
+
             // Extract usage information
             if (completion.usage) {
                 usage = {
@@ -129,7 +133,7 @@ export class Andy {
 
         // Send bot update if request was successful and we have usage data
         if (res && usage) {
-            await this.sendBotUpdate(res.model, usage);
+            this.sendBotUpdate(model, usage);
         }
 
         // Handle thinking tags for o1-style models
