@@ -51,12 +51,6 @@ const settings = {
   "narrate_behavior": true, // chat simple automatic actions ('Picking up item!')
   "chat_bot_messages": true, // publicly chat messages to other bots
 
-    "log_normal_data": false, // Logs all inputs / outputs without reasoning or vision data
-    "log_reasoning_data": false, // Logs only reasoning inputs / outputs
-    "log_vision_data": false, // Logs only vision inputs / outputs
-    // "external_logging": null, // Enable sending logs to a cloud API
-    // The setting for this is now stored in `.logging_consent`.
-  // Allows for truly autonomous playing
   "auto_idle_trigger": {
     "enabled": false,
     "timeout_secs": 120, // 10 seconds inactivity before prompting
@@ -85,7 +79,6 @@ const settings = {
   "log_normal_data": false, // Logs all inputs / outputs without reasoning or vision data
   "log_reasoning_data": false, // Logs only reasoning inputs / outputs
   "log_vision_data": false, // Logs only vision inputs / outputs
-  "external_logging": true, // Enable sending logs to a cloud API
 
 }
 
