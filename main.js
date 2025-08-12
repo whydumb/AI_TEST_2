@@ -55,7 +55,10 @@ async function main() {
             // replace "{agent_json.name}" with the new name from the file directly without json stuff
             profileContent = profileContent.replace(agent_json.name, newName);
             // now update the file
-            writeFileSync(profilePath, profileContent, 'utf8');
+            // Update the name property directly and write the updated JSON back to the file
+            agent_json.name = newName;
+            const updatedProfileContent = JSON.stringify(agent_json, null, 2);
+            writeFileSync(profilePath, updatedProfileContent, 'utf8');
         } catch (e) {
             console.error(`Failed to read or parse profile file at ${profilePath}:`, e);
         }
