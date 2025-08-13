@@ -5,8 +5,10 @@
 <h4 align="center">
   Maintained by 
   <a href="https://github.com/uukelele-scratch">@uukelele-scratch</a>, 
-  <a href="https://github.com/sweaterdog">@Sweaterdog</a>, and 
-  <a href="https://github.com/riqvip">@riqvip</a>
+  <a href="https://github.com/sweaterdog">@Sweaterdog</a>,
+  <a href="https://github.com/riqvip">@riqvip</a>,
+  <a href="https://github.com/mrelmida">@MrElmida</a>, and
+  the community.
 </h4>
 <p align="center">
   <img alt="Static Badge" src="https://img.shields.io/badge/mindcraft-ce-badge">
