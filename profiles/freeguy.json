@@ -3,5 +3,5 @@
 
     "model": "groq/llama-3.3-70b-versatile",
 
-    "max_tokens": 8000
+    "max_completion_tokens": 8000
 }
