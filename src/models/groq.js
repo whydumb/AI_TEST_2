@@ -42,6 +42,13 @@ export class GroqCloudAPI {
                 this.params.max_completion_tokens = 4000;
             }
 
+            // FIXME: Groq is complaining about "property imagePath is unsupported"
+            for (let i = 0; i < messages.length; i++) {
+                if (messages[i] && messages[i].hasOwnProperty('imagePath')) {
+                    delete messages[i].imagePath;
+                }
+            }
+
             let completion = await this.groq.chat.completions.create({
                 "messages": messages,
                 "model": this.model_name || "llama-3.3-70b-versatile",
