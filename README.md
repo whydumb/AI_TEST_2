@@ -41,18 +41,18 @@
 
 | Feature | mindcraft (Original) | mindcraft-ce (Community Edition) |
 | --- | --- | --- |
-| **Development Status** | Inactive | **Active** |
-| **Minecraft Version** | Up to 1.21.1 | Up to **1.21.4** |
-| **Node.js Version** | v14+ | **v18+** (v22 recommended) |
-| **Default Ollama Model**| `llama3.1` (Generic) | **`Andy-4`** (Built for Minecraft) |
-| **Free API Option** | No | **Yes** (`pollinations`) |
-| **Voice Interaction** | Basic Text-to-Speech (TTS) | Advanced TTS & **Speech-to-Text (STT)** |
+| **Development Status** | **Active** | **Active** |
+| **Minecraft Version** | Up to **1.21.6** | Up to **1.21.6** |
+| **Node.js Version** | idk | idk |
+| **Default Ollama Model**| **`Andy-4`** (Built for Minecraft) | **`Andy-4`** (Built for Minecraft) |
+| **Free API Option** | No | No |
+| **Voice Interaction** | Advanced TTS | Advanced TTS & **Speech-to-Text (STT)** |
 | **Vision Mode** | Simple on/off toggle | **Modes**: `off`, `prompted`, `always` |
 | **Extensibility** | None | **Plugin System** |
 | **Dataset Tools** | No | **Yes**, built-in tools for data collection |
-| **Dependencies** | Older | **Updated** (e.g., Mineflayer 4.29.0) |
+| **Dependencies** | **Updated** | **Updated** |
 | **Error Handling** | Shows technical error message, difficult to troubleshoot | **Includes suggested fix** for easy fixing |
-| **Pathfinding** | Basic, standard robotic movement. | **Upgraded movements**, ability to use doors, fence gates, and swim better.|
+| **Pathfinding** | **Upgraded movements**, ability to use doors, fence gates, and swim better. | **Upgraded movements**, ability to use doors, fence gates, and swim better. |
 
 > [!Caution]
 > Do not connect this bot to public servers with coding enabled. This project allows an LLM to write/execute code on your computer. The code is sandboxed, but still vulnerable to injection attacks. Code writing is disabled by default. You can enable it by setting <code>allow_insecure_coding</code> to <code>true</code> in <code>settings.js</code>. Ye be warned.
