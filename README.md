@@ -26,7 +26,7 @@
 
 <p align="center">
   <a href="/FAQ.md">FAQ</a> |
-  <a href="https://discord.gg/DNnBQvCtwr">Discord Support</a> |
+  <a href="https://discord.mindcraft-ce.com">Discord Support</a> |
   <a href="https://kolbynottingham.com/mindcraft/">Blog Post</a> |
   <a href="https://mindcraft-minecollab.github.io/index.html">Paper Website</a> |
   <a href="/minecollab.md">MineCollab</a>
@@ -102,7 +102,7 @@
 
 6. Run `node main.js` from the installed directory
 
-If you encounter issues, check the [FAQ](/FAQ.md) or find support on [discord](https://discord.gg/DNnBQvCtwr). If that fails, you can [create an issue](https://github.com/mindcraft-ce/mindcraft-ce/issues/new).
+If you encounter issues, check the [FAQ](/FAQ.md) or find support on [discord](https://discord.mindcraft-ce.com). If that fails, you can [create an issue](https://github.com/mindcraft-ce/mindcraft-ce/issues/new).
 
 ## Model Customization
 
