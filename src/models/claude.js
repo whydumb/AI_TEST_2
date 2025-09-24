@@ -64,7 +64,7 @@ export class Claude {
 
         try {
             console.log('Awaiting anthropic api response...');
-            // console.log('Formatted Messages for API:', JSON.stringify(messages, null, 2));
+            console.log('Formatted Messages for API:', JSON.stringify(messages, null, 2));
             // console.log('System prompt for API:', systemMessage);
 
             if (!this.params.max_tokens) {
@@ -74,10 +74,17 @@ export class Claude {
                     this.params.max_tokens = 4096;
                 }
             }
+
+            // Remove any extra fields that Anthropic API doesn't accept
+            const cleanMessages = messages.map(msg => {
+                const { imagePath, ...cleanMsg } = msg;
+                return cleanMsg;
+            });
+
             const resp = await this.anthropic.messages.create({
                 model: this.model_name || "claude-3-sonnet-20240229", // Default to a vision-capable model if none specified
                 system: systemMessage,
-                messages: messages, // messages array is now potentially modified with image data
+                messages: cleanMessages, // Use cleaned messages without imagePath
                 ...(this.params || {})
             });
             console.log('Received.')
