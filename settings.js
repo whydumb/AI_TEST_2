@@ -3,7 +3,7 @@ import fs from 'fs';
 const settings = {
   "minecraft_version": "1.21.6", // supports up to 1.21.6
   "host": "127.0.0.1", // or "localhost", "your.ip.address.here"
-  "port": 55916,
+  "port": 25565,
   "auth": "offline", // or "microsoft"
 
   // the mindserver manages all agents and hosts the UI
@@ -14,9 +14,9 @@ const settings = {
   // the base profile is shared by all bots for default prompts/examples/modes
   "base_profile": "./profiles/defaults/_default.json", // also see creative.json, god_mode.json, and personality.json is really fun.
   "profiles": [
-    "./andy.json",
+    //"./andy.json",
     // "./profiles/gpt.json",
-    // "./profiles/claude.json",
+    "./profiles/claude.json",
     // "./profiles/gemini.json",
     // "./profiles/llama.json",
     // "./profiles/qwen.json",
@@ -61,20 +61,20 @@ const settings = {
   // allows all bots to speak through text-to-speech. format: {provider}/{model}/{voice}. if set to "system" it will use system text-to-speech, which works on windows and mac, but on linux you need to `apt install espeak`.
   // specify speech model inside each profile - so that you can have each bot with different voices ;)
 
-  "stt_transcription": false, // enable speech-to-text transcription
-  "stt_provider": "pollinations", // STT provider: "groq" (requires API key) or "pollinations" (free)
-  "stt_username": "SERVER", // username for STT messages
-  "stt_agent_name": "", // agent name for STT messages, if empty it will send the STT to all bots
+  "stt_transcription": true, // enable speech-to-text transcription
+  "stt_provider": "groq", // STT provider: "groq" (requires API key) or "pollinations" (free)
+  "stt_username": "FAX", // username for STT messages
+  "stt_agent_name": "claude", // agent name for STT messages, if empty it will send the STT to all bots
 
   // STT Audio Detection Settings
-  "stt_rms_threshold": 3000,       // Raised from 1000 to reduce false triggers
-  "stt_silence_duration": 2000,   // 2 seconds of silence before stopping
+  "stt_rms_threshold": 1000,       // Raised from 1000 to reduce false triggers
+  "stt_silence_duration": 1500,   // 2 seconds of silence before stopping
   "stt_min_audio_duration": 0.5,  // Minimum audio duration in seconds
-  "stt_max_audio_duration": 45,   // Maximum audio duration in seconds
+  "stt_max_audio_duration": 15,   // Maximum audio duration in seconds
   "stt_debug_audio": true,        // Enable to see what's happening
   "stt_cooldown_ms": 2000,        // Minimum time between recordings
-  "stt_speech_threshold_ratio": 0.05, // Much lower - 5% instead of 15%
-  "stt_consecutive_speech_samples": 3, // Reduced from 5 to 3
+  "stt_speech_threshold_ratio": 0.02, // Much lower - 5% instead of 15%
+  "stt_consecutive_speech_samples": 2, // Reduced from 5 to 3
 
   "log_normal_data": false, // Logs all inputs / outputs without reasoning or vision data
   "log_reasoning_data": false, // Logs only reasoning inputs / outputs
