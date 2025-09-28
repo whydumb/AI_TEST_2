@@ -1,6 +1,6 @@
 // src/utils/robot_controller.js
 export class RobotController {
-  constructor(robotIP = process.env.ROBOT_IP || '192.168.1.100', port = 8080, opts = {}) {
+  constructor(robotIP = process.env.ROBOT_IP || '192.168.1.100', port = 8081, opts = {}) {
     this.baseUrl = `http://${robotIP}:${port}`;
     this.timeoutMs = opts.timeoutMs ?? 1200;
     this.retries = opts.retries ?? 1;
@@ -144,6 +144,6 @@ export class RobotController {
 }
 
 // 사용 예시:
-// const robot = new RobotController('192.168.1.100', 8080, { debug: true });
+// const robot = new RobotController('192.168.1.100', 8081, { debug: true });
 // await robot.onSpeechStart();  // 말할 때
 // await robot.onSpeechEnd();    // 말 끝날 때
