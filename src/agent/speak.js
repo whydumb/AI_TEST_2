@@ -1,7 +1,7 @@
 import { exec, spawn } from 'child_process';
 import { sendAudioRequest } from '../models/pollinations.js';
 import { EventEmitter } from 'events';
-import { RobotController } from '../utils/robot_controller.js';
+import { createRobotController } from '../utils/robot_controller.js';
 
 export const ttsEvents = new EventEmitter();
 
@@ -18,22 +18,19 @@ async function initRobotController() {
   robotInitialized = true;
   
   try {
-    const robotIP = process.env.ROBOT_IP || 'localhost';
-    const robotPort = process.env.ROBOT_PORT || 8081;
-    
-    robotController = new RobotController(robotIP, robotPort, { 
+    robotController = createRobotController({ 
       debug: true,
-      timeoutMs: 800,
+      timeoutMs: 600,
       retries: 1 
     });
     
-    // 연결 테스트
-    const isOnline = await robotController.ping();
-    if (isOnline) {
-      console.log(`🤖 [TTS] Robot controller connected to ${robotIP}:${robotPort}`);
+    // 헬스체크로 연결 확인
+    const health = await robotController.healthCheck();
+    if (health.online) {
+      console.log(`🤖 [TTS] Robot controller connected (latency: ${health.latency}ms)`);
       return robotController;
     } else {
-      console.warn(`🤖 [TTS] Robot controller offline at ${robotIP}:${robotPort}`);
+      console.warn(`🤖 [TTS] Robot controller offline: ${health.error || 'unknown error'}`);
       robotController = null;
       return null;
     }
