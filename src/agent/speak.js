@@ -1,31 +1,71 @@
 import { exec, spawn } from 'child_process';
 import { sendAudioRequest } from '../models/pollinations.js';
 import { EventEmitter } from 'events';
+import { RobotController } from '../utils/robot_controller.js';
 
 export const ttsEvents = new EventEmitter();
 
 let speakingQueue = [];
 let isSpeaking = false;
 
-// --- Robot LED hooks (agent.js 수정 없이 전역 참조) ---
-function getRobot() {
-  try {
-    const g = typeof globalThis !== 'undefined' ? globalThis : (typeof global !== 'undefined' ? global : null);
-    const agent = g?.agent;
-    return agent?.robot ?? null;
-  } catch { return null; }
-}
+// --- 로봇 컨트롤러 인스턴스 관리 (speak.js에서 직접) ---
+let robotController = null;
+let robotInitialized = false;
 
-async function safeSpeechStart() {
-  const robot = getRobot();
-  if (robot?.onSpeechStart) {
-    try { await robot.onSpeechStart(); } catch (e) { console.warn('[speak] onSpeechStart failed:', e?.message || e); }
+async function initRobotController() {
+  if (robotInitialized) return robotController;
+  
+  robotInitialized = true;
+  
+  try {
+    const robotIP = process.env.ROBOT_IP || 'localhost';
+    const robotPort = process.env.ROBOT_PORT || 8081;
+    
+    robotController = new RobotController(robotIP, robotPort, { 
+      debug: true,
+      timeoutMs: 800,
+      retries: 1 
+    });
+    
+    // 연결 테스트
+    const isOnline = await robotController.ping();
+    if (isOnline) {
+      console.log(`🤖 [TTS] Robot controller connected to ${robotIP}:${robotPort}`);
+      return robotController;
+    } else {
+      console.warn(`🤖 [TTS] Robot controller offline at ${robotIP}:${robotPort}`);
+      robotController = null;
+      return null;
+    }
+  } catch (error) {
+    console.warn(`🤖 [TTS] Failed to initialize robot controller:`, error.message);
+    robotController = null;
+    return null;
   }
 }
+
+// --- 로봇 LED 제어 함수들 ---
+async function safeSpeechStart() {
+  try {
+    const robot = robotController || await initRobotController();
+    if (robot?.onSpeechStart) {
+      await robot.onSpeechStart();
+      console.log(`🎤 [TTS] Speech started - robot blink ON`);
+    }
+  } catch (e) { 
+    console.warn('[TTS] onSpeechStart failed:', e?.message || e); 
+  }
+}
+
 async function safeSpeechEnd() {
-  const robot = getRobot();
-  if (robot?.onSpeechEnd) {
-    try { await robot.onSpeechEnd(); } catch (e) { console.warn('[speak] onSpeechEnd failed:', e?.message || e); }
+  try {
+    const robot = robotController || await initRobotController();
+    if (robot?.onSpeechEnd) {
+      await robot.onSpeechEnd();
+      console.log(`🎤 [TTS] Speech ended - robot blink OFF`);
+    }
+  } catch (e) { 
+    console.warn('[TTS] onSpeechEnd failed:', e?.message || e); 
   }
 }
 
@@ -153,5 +193,57 @@ async function processQueue() {
       console.error('Audio error', e);
       await finishErr(e);
     }
+  }
+}
+
+// --- 수동 로봇 제어 함수들 (외부에서 직접 호출 가능) ---
+export async function robotBlinkOn() {
+  try {
+    const robot = robotController || await initRobotController();
+    if (robot) {
+      await robot.setBlink(true);
+      console.log('🤖 [Manual] Robot blink ON');
+    }
+  } catch (e) {
+    console.warn('[Manual] robotBlinkOn failed:', e?.message || e);
+  }
+}
+
+export async function robotBlinkOff() {
+  try {
+    const robot = robotController || await initRobotController();
+    if (robot) {
+      await robot.setBlink(false);
+      console.log('🤖 [Manual] Robot blink OFF');
+    }
+  } catch (e) {
+    console.warn('[Manual] robotBlinkOff failed:', e?.message || e);
+  }
+}
+
+export async function robotToggleBlink() {
+  try {
+    const robot = robotController || await initRobotController();
+    if (robot) {
+      await robot.toggleBlink();
+      console.log('🤖 [Manual] Robot blink toggled');
+    }
+  } catch (e) {
+    console.warn('[Manual] robotToggleBlink failed:', e?.message || e);
+  }
+}
+
+export async function getRobotStatus() {
+  try {
+    const robot = robotController || await initRobotController();
+    if (robot) {
+      const status = await robot.getStatus();
+      console.log('🤖 [Manual] Robot status:', status);
+      return status;
+    }
+    return null;
+  } catch (e) {
+    console.warn('[Manual] getRobotStatus failed:', e?.message || e);
+    return null;
   }
 }
