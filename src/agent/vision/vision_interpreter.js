@@ -1,8 +1,5 @@
-vision_interpreter.js 수정:
-javascript// src/agent/vision/vision_interpreter.js
 import { Vec3 } from 'vec3';
 import { Camera } from "./camera.js";
-import { RealCamera } from "./real_camera.js";  // 추가!
 import fs from 'fs';
 import path from 'path';
 
