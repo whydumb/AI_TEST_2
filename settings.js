@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 const settings = {
-  "minecraft_version": "1.21.6", // supports up to 1.21.6
+  "minecraft_version": "1.21.1", // supports up to 1.21.6
   "host": "127.0.0.1", // or "localhost", "your.ip.address.here"
   "port": 25565,
   "auth": "offline", // or "microsoft"
@@ -35,11 +35,12 @@ const settings = {
   "only_chat_with": [], // users that the bots listen to and send general messages to. if empty it will chat publicly
 
   "language": "en", // translate to/from this language. NOT text-to-speech language. Supports these language names: https://cloud.google.com/translate/docs/languages
-  "show_bot_views": false, // show bot's view in browser at localhost:3000, 3001...
+  "use_real_camera": false,
+  "camera_device": "/dev/video0",
 
   "allow_insecure_coding": false, // allows newAction command and model can write/run code on your computer. enable at own risk
   "allow_vision": false, // allows vision model to interpret screenshots as inputs
-  "vision_mode": "prompted", // "off", "prompted", or "always"
+  "vision_mode": "off", // "off", "prompted", or "always"
   "blocked_actions": ["!checkBlueprint", "!checkBlueprintLevel", "!getBlueprint", "!getBlueprintLevel"], // commands to disable and remove from docs. Ex: ["!setMode"]
   "code_timeout_mins": -1, // minutes code is allowed to run. -1 for no timeout
   "relevant_docs_count": 5, // number of relevant code function docs to select for prompting. -1 for all
@@ -62,17 +63,17 @@ const settings = {
   // specify speech model inside each profile - so that you can have each bot with different voices ;)
 
   "stt_transcription": true, // enable speech-to-text transcription
-  "stt_provider": "groq", // STT provider: "groq" (requires API key) or "pollinations" (free)
+  "stt_provider": "pollinations", // STT provider: "groq" (requires API key) or "pollinations" (free)
   "stt_username": "FAX", // username for STT messages
   "stt_agent_name": "claude", // agent name for STT messages, if empty it will send the STT to all bots
 
   // STT Audio Detection Settings
-  "stt_rms_threshold": 1000,       // Raised from 1000 to reduce false triggers
+  "stt_rms_threshold": 500,       // Raised from 1000 to reduce false triggers
   "stt_silence_duration": 1500,   // 2 seconds of silence before stopping
   "stt_min_audio_duration": 0.5,  // Minimum audio duration in seconds
   "stt_max_audio_duration": 15,   // Maximum audio duration in seconds
   "stt_debug_audio": true,        // Enable to see what's happening
-  "stt_cooldown_ms": 2000,        // Minimum time between recordings
+  "stt_cooldown_ms": 500,        // Minimum time between recordings
   "stt_speech_threshold_ratio": 0.02, // Much lower - 5% instead of 15%
   "stt_consecutive_speech_samples": 2, // Reduced from 5 to 3
 
