@@ -1,74 +1,52 @@
+vision_interpreter.js 수정:
+javascript// src/agent/vision/vision_interpreter.js
 import { Vec3 } from 'vec3';
 import { Camera } from "./camera.js";
+import { RealCamera } from "./real_camera.js";  // 추가!
 import fs from 'fs';
 import path from 'path';
 
 export class VisionInterpreter {
-    constructor(agent, vision_mode) {
+    constructor(agent, vision_mode, use_real_camera = false) {  // 파라미터 추가
         this.agent = agent;
         this.vision_mode = vision_mode;
         this.fp = './bots/'+agent.name+'/screenshots/';
+        
         if (this.vision_mode !== 'off') {
-            this.camera = new Camera(agent.bot, this.fp);
+            // 🎯 여기가 핵심! 카메라 선택
+            if (use_real_camera) {
+                this.camera = new RealCamera(agent.bot, this.fp);
+            } else {
+                this.camera = new Camera(agent.bot, this.fp);
+            }
         }
     }
 
     async lookAtPlayer(player_name, direction) {
         if (this.vision_mode === 'off') {
-            return "Vision is disabled. Use other methods to describe the environment.";
+            return "Vision is disabled.";
         }
         if (!this.camera) {
-            return "Camera is not initialized. Vision may be set to 'off'.";
-        }
-        if (!this.agent.prompter.vision_model.sendVisionRequest && this.vision_mode === 'prompted') {
-            return "Vision requests are not enabled for the current model. Cannot analyze image.";
+            return "Camera is not initialized.";
         }
 
         let result = "";
         const bot = this.agent.bot;
         const player = bot.players[player_name]?.entity;
+        
         if (!player) {
             return `Could not find player ${player_name}`;
         }
 
-        let filename;
-        if (direction === 'with') {
-            await bot.look(player.yaw, player.pitch);
-            result = `Looking in the same direction as ${player_name}.\n`;
-            filename = await this.camera.capture();
-            this.agent.latestScreenshotPath = filename;
-        } else {
-            await bot.lookAt(new Vec3(player.position.x, player.position.y + player.height, player.position.z));
-            result = `Looking at player ${player_name}.\n`;
-            filename = await this.camera.capture();
-            this.agent.latestScreenshotPath = filename;
-        }
-
-        if (this.vision_mode === 'prompted') {
-            return result + `Image analysis: "${await this.analyzeImage(filename)}"`;
-        } else if (this.vision_mode === 'always') {
-            return result + "Screenshot taken and stored.";
-        }
-        // Should not be reached if vision_mode is one of the expected values
-        return "Error: Unknown vision mode.";
-    }
-
-    async lookAtPosition(x, y, z) {
-        if (this.vision_mode === 'off') {
-            return "Vision is disabled. Use other methods to describe the environment.";
-        }
-        if (!this.camera) {
-            return "Camera is not initialized. Vision may be set to 'off'.";
-        }
-        if (!this.agent.prompter.vision_model.sendVisionRequest && this.vision_mode === 'prompted') {
-            return "Vision requests are not enabled for the current model. Cannot analyze image.";
-        }
-
-        let result = "";
-        const bot = this.agent.bot;
-        await bot.lookAt(new Vec3(x, y + 2, z)); // lookAt requires y to be eye level, so +2 from feet
-        result = `Looking at coordinate ${x}, ${y}, ${z}.\n`;
-
+        // ❌ 이 부분들은 실제 카메라에서는 의미 없음 (제거 가능)
+        // if (direction === 'with') {
+        //     await bot.look(player.yaw, player.pitch);
+        // } else {
+        //     await bot.lookAt(...);
+        // }
+        
+        // ✅ 그냥 바로 찍기
+        result = `Taking photo for player ${player_name}.\n`;
         let filename = await this.camera.capture();
         this.agent.latestScreenshotPath = filename;
 
@@ -77,36 +55,27 @@ export class VisionInterpreter {
         } else if (this.vision_mode === 'always') {
             return result + "Screenshot taken and stored.";
         }
-        // Should not be reached if vision_mode is one of the expected values
+        
         return "Error: Unknown vision mode.";
     }
 
-    getCenterBlockInfo() {
-        const bot = this.agent.bot;
-        const maxDistance = 128; // Maximum distance to check for blocks
-        const targetBlock = bot.blockAtCursor(maxDistance);
+    async lookAtPosition(x, y, z) {
+        // lookAtPlayer와 거의 동일
+        // ❌ bot.lookAt() 제거
+        // ✅ 그냥 capture() 호출
         
-        if (targetBlock) {
-            return `Block at center view: ${targetBlock.name} at (${targetBlock.position.x}, ${targetBlock.position.y}, ${targetBlock.position.z})`;
-        } else {
-            return "No block in center view";
+        let result = `Taking photo for position ${x}, ${y}, ${z}.\n`;
+        let filename = await this.camera.capture();
+        this.agent.latestScreenshotPath = filename;
+
+        if (this.vision_mode === 'prompted') {
+            return result + `Image analysis: "${await this.analyzeImage(filename)}"`;
+        } else if (this.vision_mode === 'always') {
+            return result + "Screenshot taken and stored.";
         }
+        
+        return "Error: Unknown vision mode.";
     }
 
-    async analyzeImage(filename) {
-        try {
-            // filename already includes .jpg from camera.js
-            const imageFullPath = path.join(this.fp, filename);
-            const imageBuffer = fs.readFileSync(imageFullPath);
-            const messages = this.agent.history.getHistory();
-
-            const blockInfo = this.getCenterBlockInfo();
-            const result = await this.agent.prompter.promptVision(messages, imageBuffer);
-            return result + `\n${blockInfo}`;
-
-        } catch (error) {
-            console.warn('Error reading image:', error);
-            return `Error reading image: ${error.message}`;
-        }
-    }
-} 
+    // analyzeImage()는 그대로 유지 - 이미지 분석 부분
+}
