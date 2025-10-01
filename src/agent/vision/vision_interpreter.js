@@ -3,182 +3,231 @@ import fs from 'fs/promises';
 import path from 'path';
 
 export class VisionInterpreter {
-    constructor(agent, vision_mode, robotController) {
+    constructor(agent, vision_mode) {
         this.agent = agent;
         this.vision_mode = vision_mode;
         this.fp = `./bots/${agent.name}/screenshots`;
-        this.robot = robotController; // 의존성 주입
         
-        if (this.vision_mode !== 'off' && this.robot) {
-            console.log('🎥 Robot camera initialized');
-            this._checkRobotConnection();
+        // 디렉토리 생성
+        this._ensureDirectory();
+        
+        if (this.vision_mode !== 'off') {
+            console.log('📸 Vision interpreter initialized (file-based mode)');
         }
     }
 
-    async _checkRobotConnection() {
+    async _ensureDirectory() {
         try {
-            const health = await this.robot.healthCheck();
-            if (health.online) {
-                console.log(`🤖 Robot camera ready (latency: ${health.latency}ms)`);
-            } else {
-                console.warn(`⚠️  Robot offline: ${health.error}`);
-            }
-        } catch (error) {
-            console.warn(`⚠️  Failed to check robot connection:`, error.message);
-        }
-    }
-
-    /**
-     * 로봇 카메라에서 이미지를 캡처하여 파일로 저장
-     * @param {Object} options - 캡처 옵션
-     * @param {number} options.w - 너비 (기본: 800)
-     * @param {number} options.h - 높이 (기본: 600)
-     * @param {number} options.q - 품질 (기본: 2)
-     * @returns {Promise<string>} 저장된 파일명
-     */
-    async captureImage({ w = 800, h = 600, q = 2 } = {}) {
-        if (!this.robot) {
-            throw new Error('Robot controller not initialized');
-        }
-
-        try {
-            // screenshots 폴더 확인/생성
             await fs.mkdir(this.fp, { recursive: true });
-            
-            // 로봇 카메라에서 이미지 캡처하여 파일로 저장
-            const { path: savedPath, bytes } = await this.robot.captureToFile(this.fp, { w, h, q });
-            
-            // 파일명만 추출 (경로 제외)
-            const filename = path.basename(savedPath);
-            
-            console.log(`📸 ${filename} (${(bytes / 1024).toFixed(1)} KB)`);
-            return filename;
-            
         } catch (error) {
-            console.error('🎥 Robot camera capture failed:', error.message);
-            throw new Error(`Robot camera error: ${error.message}`);
+            console.error('Failed to create screenshots directory:', error);
         }
     }
 
     /**
-     * 메모리 버퍼로 이미지 캡처 (비전 모델에 바로 전달용)
-     * @param {Object} options - 캡처 옵션
-     * @returns {Promise<Buffer>} 이미지 버퍼
+     * 지정된 파일의 이미지를 분석
+     * @param {string} filename - 분석할 이미지 파일명 (screenshots 폴더 내)
+     * @param {string} prompt - 분석 프롬프트 (옵션)
+     * @returns {Promise<string>} 분석 결과
      */
-    async captureBuffer({ w = 800, h = 600, q = 2 } = {}) {
-        if (!this.robot) {
-            throw new Error('Robot controller not initialized');
-        }
-
+    async analyzeImage(filename, prompt = "Describe what you see in this image.") {
+        const filepath = path.join(this.fp, filename);
+        
         try {
-            const buffer = await this.robot.captureFrame({ w, h, q });
-            console.log(`📸 Captured frame to buffer (${(buffer.length / 1024).toFixed(1)} KB)`);
-            return buffer;
+            // 파일 존재 확인
+            await fs.access(filepath);
+            
+            // 이미지 버퍼로 읽기
+            const imageBuffer = await fs.readFile(filepath);
+            
+            console.log(`📸 Analyzing image: ${filename} (${(imageBuffer.length / 1024).toFixed(1)} KB)`);
+            
+            // Claude vision API 호출
+            const analysis = await this.agent.prompter.promptVision(
+                imageBuffer,
+                prompt
+            );
+            
+            return analysis;
         } catch (error) {
-            console.error('🎥 Robot camera capture failed:', error.message);
-            throw new Error(`Robot camera error: ${error.message}`);
+            if (error.code === 'ENOENT') {
+                return `Error: Image file '${filename}' not found in ${this.fp}`;
+            }
+            console.error('Failed to analyze image:', error);
+            return `Image analysis failed: ${error.message}`;
         }
     }
 
+    /**
+     * 이미지 버퍼를 직접 분석 (메모리에서)
+     * @param {Buffer} imageBuffer - 이미지 버퍼
+     * @param {string} prompt - 분석 프롬프트
+     * @returns {Promise<string>} 분석 결과
+     */
+    async analyzeBuffer(imageBuffer, prompt = "Describe what you see in this image.") {
+        if (this.vision_mode === 'off') {
+            return "Vision is disabled.";
+        }
+
+        try {
+            console.log(`📸 Analyzing image buffer (${(imageBuffer.length / 1024).toFixed(1)} KB)`);
+            
+            const analysis = await this.agent.prompter.promptVision(
+                imageBuffer,
+                prompt
+            );
+            
+            return analysis;
+        } catch (error) {
+            console.error('Failed to analyze image buffer:', error);
+            return `Image analysis failed: ${error.message}`;
+        }
+    }
+
+    /**
+     * screenshots 폴더의 모든 이미지 파일 목록 반환
+     * @returns {Promise<string[]>} 이미지 파일명 배열
+     */
+    async listImages() {
+        try {
+            const files = await fs.readdir(this.fp);
+            const imageFiles = files.filter(f => 
+                /\.(jpg|jpeg|png|gif|webp)$/i.test(f)
+            );
+            return imageFiles;
+        } catch (error) {
+            console.error('Failed to list images:', error);
+            return [];
+        }
+    }
+
+    /**
+     * 가장 최근 이미지 파일 반환
+     * @returns {Promise<string|null>} 가장 최근 이미지 파일명
+     */
+    async getLatestImage() {
+        try {
+            const files = await this.listImages();
+            if (files.length === 0) return null;
+
+            // 파일의 수정 시간으로 정렬
+            const filesWithStats = await Promise.all(
+                files.map(async (f) => {
+                    const stats = await fs.stat(path.join(this.fp, f));
+                    return { name: f, mtime: stats.mtime };
+                })
+            );
+
+            filesWithStats.sort((a, b) => b.mtime - a.mtime);
+            return filesWithStats[0].name;
+        } catch (error) {
+            console.error('Failed to get latest image:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 레거시 호환성: lookAtPlayer
+     * 가장 최근 이미지를 사용하여 분석
+     */
     async lookAtPlayer(player_name, direction) {
         if (this.vision_mode === 'off') {
             return "Vision is disabled.";
         }
         
-        let result = `Taking photo from robot camera.\n`;
-        
-        // 추적 모드 활성화
-        try {
-            await this.robot.setTrack(true);
-            console.log('🎯 Robot tracking enabled');
-            await new Promise(r => setTimeout(r, 300));
-        } catch (error) {
-            console.warn('⚠️  Failed to enable tracking:', error.message);
+        const latestImage = await this.getLatestImage();
+        if (!latestImage) {
+            return "No images available for analysis. Please place an image in the screenshots folder first.";
         }
-        
-        let filename = await this.captureImage();
-        this.agent.latestScreenshotPath = filename;
 
+        this.agent.latestScreenshotPath = latestImage;
+        
+        let result = `Using latest image: ${latestImage}\n`;
+        
         if (this.vision_mode === 'prompted') {
-            return result + `Image analysis: "${await this.analyzeImage(filename)}"`;
+            const analysis = await this.analyzeImage(latestImage, 
+                `Looking at player ${player_name}. Describe what you see.`);
+            return result + `Image analysis: "${analysis}"`;
         } else if (this.vision_mode === 'always') {
-            return result + "Screenshot taken and stored.";
+            return result + "Screenshot reference stored for context.";
         }
         
         return "Error: Unknown vision mode.";
     }
 
+    /**
+     * 레거시 호환성: lookAtPosition
+     * 가장 최근 이미지를 사용하여 분석
+     */
     async lookAtPosition(x, y, z) {
         if (this.vision_mode === 'off') {
             return "Vision is disabled.";
         }
         
-        let result = `Taking photo from robot camera.\n`;
-        
-        let filename = await this.captureImage();
-        this.agent.latestScreenshotPath = filename;
+        const latestImage = await this.getLatestImage();
+        if (!latestImage) {
+            return "No images available for analysis. Please place an image in the screenshots folder first.";
+        }
 
+        this.agent.latestScreenshotPath = latestImage;
+        
+        let result = `Using latest image: ${latestImage}\n`;
+        
         if (this.vision_mode === 'prompted') {
-            return result + `Image analysis: "${await this.analyzeImage(filename)}"`;
+            const analysis = await this.analyzeImage(latestImage, 
+                `Looking at position (${x}, ${y}, ${z}). Describe what you see.`);
+            return result + `Image analysis: "${analysis}"`;
         } else if (this.vision_mode === 'always') {
-            return result + "Screenshot taken and stored.";
+            return result + "Screenshot reference stored for context.";
         }
         
         return "Error: Unknown vision mode.";
     }
 
+    /**
+     * 레거시 호환성: captureFullView
+     * 가장 최근 이미지를 사용하여 분석
+     */
     async captureFullView() {
         if (this.vision_mode === 'off') {
             return "Vision is disabled.";
         }
 
-        let result = `Capturing robot camera view.\n`;
-        
-        let filename = await this.captureImage();
-        this.agent.latestScreenshotPath = filename;
+        const latestImage = await this.getLatestImage();
+        if (!latestImage) {
+            return "No images available for analysis. Please place an image in the screenshots folder first.";
+        }
 
+        this.agent.latestScreenshotPath = latestImage;
+        
+        let result = `Using latest image: ${latestImage}\n`;
+        
         if (this.vision_mode === 'prompted') {
-            return result + `Image analysis: "${await this.analyzeImage(filename)}"`;
+            const analysis = await this.analyzeImage(latestImage);
+            return result + `Image analysis: "${analysis}"`;
         } else if (this.vision_mode === 'always') {
-            return result + "Screenshot taken and stored.";
+            return result + "Screenshot reference stored for context.";
         }
         
         return "Error: Unknown vision mode.";
     }
 
-    async analyzeImage(filename) {
-        const filepath = path.join(this.fp, filename);
-        
-        try {
-            const imageBuffer = await fs.readFile(filepath);
-            
-            // Claude vision API 호출
-            const analysis = await this.agent.prompter.promptVision(
-                imageBuffer,
-                "Describe what you see in this image from the robot's perspective."
-            );
-            
-            return analysis;
-        } catch (error) {
-            console.error('Failed to analyze image:', error);
-            return 'Image analysis failed.';
-        }
-    }
-
     /**
-     * 이미지를 직접 분석 (파일 저장 없이 버퍼로)
-     * @param {Object} options - 캡처 옵션
-     * @param {string} prompt - 분석 프롬프트
-     * @returns {Promise<string>} 분석 결과
+     * 특정 이미지 파일을 분석하고 결과 반환 (외부 명령용)
+     * @param {string} filename - 분석할 파일명
+     * @returns {Promise<string>}
      */
-    async analyzeDirectly(options = {}, prompt = "Describe what you see in this image.") {
-        try {
-            const imageBuffer = await this.captureBuffer(options);
-            const analysis = await this.agent.prompter.promptVision(imageBuffer, prompt);
-            return analysis;
-        } catch (error) {
-            console.error('Failed to analyze image:', error);
-            return 'Image analysis failed.';
+    async analyzeSpecificImage(filename) {
+        if (this.vision_mode === 'off') {
+            return "Vision is disabled.";
         }
+
+        const images = await this.listImages();
+        if (!images.includes(filename)) {
+            return `Image '${filename}' not found. Available images: ${images.join(', ') || 'none'}`;
+        }
+
+        const analysis = await this.analyzeImage(filename);
+        return `Analysis of ${filename}: "${analysis}"`;
     }
 }
