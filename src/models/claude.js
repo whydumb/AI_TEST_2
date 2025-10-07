@@ -20,7 +20,7 @@ export class Claude {
         let res = null;
 
         if (imageData) {
-            const visionModels = ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"];
+            const visionModels = ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307", "claude-3-5-sonnet", "claude-3-5-haiku"];
             if (!visionModels.some(vm => this.model_name.includes(vm))) {
                 console.warn(`[Claude] Warning: imageData provided for model ${this.model_name}, which is not explicitly a Claude 3 vision model. The image may be ignored or cause an error.`);
             }
@@ -35,50 +35,40 @@ export class Claude {
 
             if (lastUserMessageIndex !== -1) {
                 const userMessage = messages[lastUserMessageIndex];
-				const sharp = (await import('sharp')).default;
-					const jpeg = await sharp(imageData).jpeg({ quality: 90 }).toBuffer();
-					const imagePart = {
-						type: "input_image",
-					source: {
-						type: "base64",
-							media_type: "image/jpeg",
-						data: jpeg.toString('base64')
-						}
-				};
- 
- 
- 
- //               const imagePart = {
- //                   type: "image",
-  //                  source: {
-  //                      type: "base64",
-   //                     media_type: "image/jpeg", // Assuming JPEG
- //                       data: imageData.toString('base64')
- //                   }
-//                };
+                
+                // ✅ Sharp를 사용해서 항상 JPEG로 변환
+                const sharp = (await import('sharp')).default;
+                const jpegBuffer = await sharp(imageData)
+                    .jpeg({ quality: 90 })
+                    .toBuffer();
+                
+                const imagePart = {
+                    type: "image",
+                    source: {
+                        type: "base64",
+                        media_type: "image/jpeg",
+                        data: jpegBuffer.toString('base64')
+                    }
+                };
 
                 if (typeof userMessage.content === 'string') {
                     userMessage.content = [{ type: "text", text: userMessage.content }, imagePart];
                 } else if (Array.isArray(userMessage.content)) {
                     // If content is already an array, add the image part.
-                    // This handles cases where a user message might already have multiple parts (e.g. multiple text parts, though less common for this bot).
                     userMessage.content.push(imagePart);
                 } else {
-                     // Fallback or error if content is an unexpected type
+                    // Fallback or error if content is an unexpected type
                     console.warn('[Claude] Last user message content is not a string or array. Cannot attach image.');
-                    userMessage.content = [imagePart]; // Or create a new message with just the image if appropriate
+                    userMessage.content = [{ type: "text", text: "Image attached" }, imagePart];
                 }
             } else {
                 console.warn('[Claude] imageData provided, but no user message found to attach it to. Image not sent.');
-                // Optionally, could create a new user message with the image if that's desired behavior.
-                // messages.push({ role: 'user', content: [imagePart] });
             }
         }
 
         try {
             console.log('Awaiting anthropic api response...');
             console.log('Formatted Messages for API:', JSON.stringify(messages, null, 2));
-            // console.log('System prompt for API:', systemMessage);
 
             if (!this.params.max_tokens) {
                 if (this.params.thinking?.budget_tokens) {
@@ -100,6 +90,7 @@ export class Claude {
                 messages: cleanMessages, // Use cleaned messages without imagePath
                 ...(this.params || {})
             });
+            
             console.log('Received.')
             const textContent = resp.content.find(content => content.type === 'text');
             if (textContent) {
@@ -116,6 +107,7 @@ export class Claude {
             }
             console.log(err);
         }
+        
         const logMessagesForClaude = [{ role: "system", content: systemMessage }].concat(turns);
         if (typeof res === 'string') {
             res = res.replace(/<thinking>/g, '<think>').replace(/<\/thinking>/g, '</think>');
@@ -140,16 +132,19 @@ export class Claude {
     }
 
     async sendVisionRequest(turns, systemMessage, imageBuffer) {
-         const sharp = (await import('sharp')).default;
-+        const jpeg = await sharp(imageBuffer).jpeg({ quality: 90 }).toBuffer();
-+        const visionUserMessageContent = [
-+            { type: "text", text: systemMessage },
-+            {
-+                type: "input_image",
-+                source: {
-+                    type: "base64",
-+                    media_type: "image/jpeg",
-+                    data: jpeg.toString('base64')
+        const sharp = (await import('sharp')).default;
+        const jpegBuffer = await sharp(imageBuffer)
+            .jpeg({ quality: 90 })
+            .toBuffer();
+        
+        const visionUserMessageContent = [
+            { type: "text", text: systemMessage },
+            {
+                type: "image",
+                source: {
+                    type: "base64",
+                    media_type: "image/jpeg",
+                    data: jpegBuffer.toString('base64')
                 }
             }
         ];
