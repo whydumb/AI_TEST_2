@@ -500,12 +500,16 @@ export class Prompter {
         return res.trim().toLowerCase() === 'respond';
     }
 
-    async promptVision(messages, imageBuffer) {
-        await this.checkCooldown();
-        let prompt = this.profile.image_analysis;
-        prompt = await this.replaceStrings(prompt, messages, null, null, null);
-        return await this.vision_model.sendVisionRequest(messages, prompt, imageBuffer);
-    }
+    // 수정 (VisionInterpreter 호출과 맞추기: (imageBuffer, prompt))
+	async promptVision(imageBuffer, prompt) {
+		await this.checkCooldown();
+		// 필요 시 기본 프롬프트 채우기
+		if (!prompt) prompt = this.profile.image_analysis || 'Describe what you see in this image.';
+		// replaceStrings에서 messages가 필요 없다면 빈 배열 전달
+		prompt = await this.replaceStrings(prompt, [], null, null, null);
+		// sendVisionRequest의 시그니처는 각 모델 구현과 일치시켜야 함.
+		return await this.vision_model.sendVisionRequest([], prompt, imageBuffer);
+	}
 
     async promptGoalSetting(messages, last_goals) {
         // deprecated
