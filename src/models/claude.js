@@ -35,14 +35,27 @@ export class Claude {
 
             if (lastUserMessageIndex !== -1) {
                 const userMessage = messages[lastUserMessageIndex];
-                const imagePart = {
-                    type: "image",
-                    source: {
-                        type: "base64",
-                        media_type: "image/jpeg", // Assuming JPEG
-                        data: imageData.toString('base64')
-                    }
-                };
+				const sharp = (await import('sharp')).default;
+					const jpeg = await sharp(imageData).jpeg({ quality: 90 }).toBuffer();
+					const imagePart = {
+						type: "input_image",
+					source: {
+						type: "base64",
+							media_type: "image/jpeg",
+						data: jpeg.toString('base64')
+						}
+				};
+ 
+ 
+ 
+ //               const imagePart = {
+ //                   type: "image",
+  //                  source: {
+  //                      type: "base64",
+   //                     media_type: "image/jpeg", // Assuming JPEG
+ //                       data: imageData.toString('base64')
+ //                   }
+//                };
 
                 if (typeof userMessage.content === 'string') {
                     userMessage.content = [{ type: "text", text: userMessage.content }, imagePart];
@@ -127,17 +140,20 @@ export class Claude {
     }
 
     async sendVisionRequest(turns, systemMessage, imageBuffer) {
-        const visionUserMessageContent = [
-            { type: "text", text: systemMessage },
-            {
-                type: "image",
-                source: {
-                    type: "base64",
-                    media_type: "image/jpeg",
-                    data: imageBuffer.toString('base64')
+         const sharp = (await import('sharp')).default;
++        const jpeg = await sharp(imageBuffer).jpeg({ quality: 90 }).toBuffer();
++        const visionUserMessageContent = [
++            { type: "text", text: systemMessage },
++            {
++                type: "input_image",
++                source: {
++                    type: "base64",
++                    media_type: "image/jpeg",
++                    data: jpeg.toString('base64')
                 }
             }
         ];
+
         const turnsForAPIRequest = [...turns, { role: "user", content: visionUserMessageContent }];
 
         const res = await this.sendRequest(turnsForAPIRequest, systemMessage);
