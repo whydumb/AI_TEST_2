@@ -15,14 +15,57 @@ export class Claude {
         this.supportsRawImageInput = true;
     }
 
+    // ✅ 이미지 데이터 검증 및 변환 함수
+    async validateAndConvertImage(imageData) {
+        try {
+            const sharp = (await import('sharp')).default;
+            
+            // 이미지 메타데이터 먼저 확인
+            const metadata = await sharp(imageData).metadata();
+            console.log(`[Claude] Image metadata: ${metadata.format}, ${metadata.width}x${metadata.height}, ${metadata.channels} channels`);
+            
+            // JPEG로 변환
+            const jpegBuffer = await sharp(imageData)
+                .jpeg({ quality: 90 })
+                .toBuffer();
+            
+            console.log(`[Claude] Image converted to JPEG: ${jpegBuffer.length} bytes`);
+            return jpegBuffer;
+            
+        } catch (error) {
+            console.error(`[Claude] Image processing error:`, error);
+            
+            // Sharp 실패 시 원본 데이터가 이미 JPEG인지 확인
+            if (imageData instanceof Buffer && imageData.length > 0) {
+                // JPEG 시그니처 확인 (FF D8 FF)
+                if (imageData[0] === 0xFF && imageData[1] === 0xD8 && imageData[2] === 0xFF) {
+                    console.log('[Claude] Using original JPEG data');
+                    return imageData;
+                }
+            }
+            
+            throw new Error(`Cannot process image: ${error.message}`);
+        }
+    }
+
     async sendRequest(turns, systemMessage, imageData = null) {
-        const messages = strictFormat(turns); // Ensure messages are in role/content format
+        const messages = strictFormat(turns);
         let res = null;
 
         if (imageData) {
-            const visionModels = ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307", "claude-3-5-sonnet", "claude-3-5-haiku"];
+            // ✅ Claude 4 모델도 비전 지원 추가
+            const visionModels = [
+                "claude-3-opus-20240229", 
+                "claude-3-sonnet-20240229", 
+                "claude-3-haiku-20240307",
+                "claude-3-5-sonnet",
+                "claude-3-5-haiku",
+                "claude-sonnet-4",  // ← Claude 4 추가
+                "claude-4"
+            ];
+            
             if (!visionModels.some(vm => this.model_name.includes(vm))) {
-                console.warn(`[Claude] Warning: imageData provided for model ${this.model_name}, which is not explicitly a Claude 3 vision model. The image may be ignored or cause an error.`);
+                console.warn(`[Claude] Warning: imageData provided for model ${this.model_name}, vision support uncertain.`);
             }
 
             let lastUserMessageIndex = -1;
@@ -34,32 +77,33 @@ export class Claude {
             }
 
             if (lastUserMessageIndex !== -1) {
-                const userMessage = messages[lastUserMessageIndex];
-                
-                // ✅ Sharp를 사용해서 항상 JPEG로 변환
-                const sharp = (await import('sharp')).default;
-                const jpegBuffer = await sharp(imageData)
-                    .jpeg({ quality: 90 })
-                    .toBuffer();
-                
-                const imagePart = {
-                    type: "image",
-                    source: {
-                        type: "base64",
-                        media_type: "image/jpeg",
-                        data: jpegBuffer.toString('base64')
-                    }
-                };
+                try {
+                    const userMessage = messages[lastUserMessageIndex];
+                    
+                    // ✅ 검증된 이미지 변환 사용
+                    const jpegBuffer = await this.validateAndConvertImage(imageData);
+                    
+                    const imagePart = {
+                        type: "image",
+                        source: {
+                            type: "base64",
+                            media_type: "image/jpeg",
+                            data: jpegBuffer.toString('base64')
+                        }
+                    };
 
-                if (typeof userMessage.content === 'string') {
-                    userMessage.content = [{ type: "text", text: userMessage.content }, imagePart];
-                } else if (Array.isArray(userMessage.content)) {
-                    // If content is already an array, add the image part.
-                    userMessage.content.push(imagePart);
-                } else {
-                    // Fallback or error if content is an unexpected type
-                    console.warn('[Claude] Last user message content is not a string or array. Cannot attach image.');
-                    userMessage.content = [{ type: "text", text: "Image attached" }, imagePart];
+                    if (typeof userMessage.content === 'string') {
+                        userMessage.content = [{ type: "text", text: userMessage.content }, imagePart];
+                    } else if (Array.isArray(userMessage.content)) {
+                        userMessage.content.push(imagePart);
+                    } else {
+                        console.warn('[Claude] Last user message content is not a string or array. Cannot attach image.');
+                        userMessage.content = [{ type: "text", text: "Image attached" }, imagePart];
+                    }
+                } catch (imageError) {
+                    console.error('[Claude] Failed to process image:', imageError);
+                    // 이미지 처리 실패 시 이미지 없이 진행
+                    imageData = null;
                 }
             } else {
                 console.warn('[Claude] imageData provided, but no user message found to attach it to. Image not sent.');
@@ -68,11 +112,11 @@ export class Claude {
 
         try {
             console.log('Awaiting anthropic api response...');
-            console.log('Formatted Messages for API:', JSON.stringify(messages, null, 2));
+            // console.log('Formatted Messages for API:', JSON.stringify(messages, null, 2));
 
             if (!this.params.max_tokens) {
                 if (this.params.thinking?.budget_tokens) {
-                    this.params.max_tokens = this.params.thinking.budget_tokens + 1000; // max_tokens must be greater
+                    this.params.max_tokens = this.params.thinking.budget_tokens + 1000;
                 } else {
                     this.params.max_tokens = 4096;
                 }
@@ -85,9 +129,9 @@ export class Claude {
             });
 
             const resp = await this.anthropic.messages.create({
-                model: this.model_name || "claude-3-sonnet-20240229", // Default to a vision-capable model if none specified
+                model: this.model_name || "claude-3-sonnet-20240229",
                 system: systemMessage,
-                messages: cleanMessages, // Use cleaned messages without imagePath
+                messages: cleanMessages,
                 ...(this.params || {})
             });
             
@@ -113,10 +157,10 @@ export class Claude {
             res = res.replace(/<thinking>/g, '<think>').replace(/<\/thinking>/g, '</think>');
         }
 
-        if (imageData) { // If imageData was part of this sendRequest call
-            let visionPromptText = ""; // Attempt to find the text prompt associated with the image
+        if (imageData) {
+            let visionPromptText = "";
             if (turns.length > 0) {
-                const lastTurn = messages[messages.length - 1]; // `messages` is strictFormat(turns)
+                const lastTurn = messages[messages.length - 1];
                 if (lastTurn.role === 'user' && Array.isArray(lastTurn.content)) {
                     const textPart = lastTurn.content.find(part => part.type === 'text');
                     if (textPart) visionPromptText = textPart.text;
@@ -132,31 +176,32 @@ export class Claude {
     }
 
     async sendVisionRequest(turns, systemMessage, imageBuffer) {
-        const sharp = (await import('sharp')).default;
-        const jpegBuffer = await sharp(imageBuffer)
-            .jpeg({ quality: 90 })
-            .toBuffer();
-        
-        const visionUserMessageContent = [
-            { type: "text", text: systemMessage },
-            {
-                type: "image",
-                source: {
-                    type: "base64",
-                    media_type: "image/jpeg",
-                    data: jpegBuffer.toString('base64')
+        try {
+            const jpegBuffer = await this.validateAndConvertImage(imageBuffer);
+            
+            const visionUserMessageContent = [
+                { type: "text", text: systemMessage },
+                {
+                    type: "image",
+                    source: {
+                        type: "base64",
+                        media_type: "image/jpeg",
+                        data: jpegBuffer.toString('base64')
+                    }
                 }
+            ];
+
+            const turnsForAPIRequest = [...turns, { role: "user", content: visionUserMessageContent }];
+            const res = await this.sendRequest(turnsForAPIRequest, systemMessage);
+
+            if (imageBuffer && res) {
+                logVision([{ role: "system", content: systemMessage }].concat(turns), imageBuffer, res, systemMessage);
             }
-        ];
-
-        const turnsForAPIRequest = [...turns, { role: "user", content: visionUserMessageContent }];
-
-        const res = await this.sendRequest(turnsForAPIRequest, systemMessage);
-
-        if (imageBuffer && res) {
-            logVision([{ role: "system", content: systemMessage }].concat(turns), imageBuffer, res, systemMessage);
+            return res;
+        } catch (error) {
+            console.error('[Claude] Vision request failed:', error);
+            return "Failed to process image for vision request.";
         }
-        return res;
     }
 
     async embed(text) {
