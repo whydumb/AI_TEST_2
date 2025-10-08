@@ -85,11 +85,31 @@ const modes_list = [
         max_stuck_time: 20,
         prev_dig_block: null,
         update: async function (agent) {
+            // 🔧 Vision 명령 실행 중에는 stuck 체크 제외
+            const currentAction = agent.actions.currentActionLabel;
+            if (currentAction) {
+                // Vision 관련 명령어 체크 (lookAt, capture 등)
+                const visionKeywords = ['look', 'capture', 'view', 'observe', 'watch'];
+                const isVisionCommand = visionKeywords.some(keyword => 
+                    currentAction.toLowerCase().includes(keyword)
+                );
+                
+                if (isVisionCommand) {
+                    // Vision 명령 중에는 stuck 상태 초기화하고 체크 건너뛰기
+                    this.prev_location = null;
+                    this.stuck_time = 0;
+                    this.prev_dig_block = null;
+                    return;
+                }
+            }
+
+            // Idle 상태에서는 stuck 체크 안 함
             if (agent.isIdle()) { 
                 this.prev_location = null;
                 this.stuck_time = 0;
-                return; // don't get stuck when idle
+                return;
             }
+
             const bot = agent.bot;
             const cur_dig_block = bot.targetDigBlock;
             if (cur_dig_block && !this.prev_dig_block) {
