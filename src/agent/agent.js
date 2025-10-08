@@ -143,9 +143,7 @@ export class Agent {
                 await new Promise((resolve) => setTimeout(resolve, 10000));
                 this.checkAllPlayersPresent();
               
-                console.log('Initializing vision intepreter...');
-                this.vision_interpreter = new VisionInterpreter(this, settings.vision_mode);
-
+               // 옮김
             } catch (error) {
                 console.error('Error in spawn event:', error);
                 process.exit(0);
@@ -264,6 +262,20 @@ export class Agent {
             startAt: 14,
             bannedFood: ["rotten_flesh", "spider_eye", "poisonous_potato", "pufferfish", "chicken"]
         };
+
+
+		// ✅ Vision 초기화를 여기로 이동
+		console.log('Initializing vision interpreter...');
+		try {
+			this.vision_interpreter = new VisionInterpreter(this, settings.vision_mode || 'off');
+			console.log('✅ Vision interpreter initialized successfully');
+		} catch (error) {
+			console.error('❌ Failed to initialize vision interpreter:', error);
+			this.vision_interpreter = null;
+		}
+
+
+
 
         if (save_data?.self_prompt) {
             if (init_message) {
