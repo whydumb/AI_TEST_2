@@ -84,10 +84,10 @@ for (const file of leftover) {
 const RMS_THRESHOLD = settings.stt_rms_threshold || 8000;
 const SILENCE_DURATION = settings.stt_silence_duration || 2000;
 const MIN_AUDIO_DURATION = settings.stt_min_audio_duration || 0.5;
-const MAX_AUDIO_DURATION = settings.stt_max_audio_duration || 15;
+const MAX_AUDIO_DURATION = settings.stt_max_audio_duration || 10;
 const DEBUG_AUDIO = settings.stt_debug_audio || false;
 const COOLDOWN_MS = settings.stt_cooldown_ms || 2000;
-const SPEECH_THRESHOLD_RATIO = settings.stt_speech_threshold_ratio || 0.15;
+const SPEECH_THRESHOLD_RATIO = settings.stt_speech_threshold_ratio || 0.12;
 const CONSECUTIVE_SPEECH_SAMPLES = settings.stt_consecutive_speech_samples || 5;
 const SAMPLE_RATE = 16000;
 const BIT_DEPTH = 16;
@@ -355,16 +355,17 @@ async function recordAndTranscribeOnce() {
         // Only log successful transcriptions
         console.log("[STT] Transcribed:", text);
 
-        const finalMessage = `[${STT_USERNAME}] ${text}`;
+		// 수정 후
+	const finalMessage = text; // 대괄호 제거, 순수한 텍스트만
 
-        if (!STT_AGENT_NAME.trim()) {
-          const agentNames = getAllInGameAgentNames();
-          for (const agentName of agentNames) {
-            getIO().emit('send-message', agentName, finalMessage);
-          }
-        } else {
-          getIO().emit('send-message', STT_AGENT_NAME, finalMessage);
-        }
+	if (!STT_AGENT_NAME.trim()) {
+		const agentNames = getAllInGameAgentNames();
+		for (const agentName of agentNames) {
+			getIO().emit('send-message', agentName, finalMessage, STT_USERNAME);
+		}
+	} else {
+		getIO().emit('send-message', STT_AGENT_NAME, finalMessage, STT_USERNAME);
+	}
 
         cleanupAndResolve(text);
       } catch (err) {
