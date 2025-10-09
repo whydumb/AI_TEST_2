@@ -7,10 +7,9 @@ import { promisify } from 'util';
 const execFileAsync = promisify(execFile);
 const execAsync = promisify(exec);
 
-// ✅ settings.js 없어도 동작하도록 기본값
 const defaultSettings = {
   use_real_camera: true,
-  camera_device: 'Integrated Camera', // Windows dshow 기본 장치명
+  camera_device: '0',  // VFW 인덱스
 };
 
 export class VisionInterpreter {
@@ -26,16 +25,17 @@ export class VisionInterpreter {
         capture: async () => {
           const settings = await this._getSettings();
           if (settings.use_real_camera) {
-            return await this.captureFromWebcam(settings.camera_device || undefined);
+            return await this.captureFromWebcam();
           }
           return await this.getLatestImage();
         },
       };
-      console.log('📸 Vision interpreter initialized with camera support');
+      console.log('📸 Vision interpreter initialized');
     }
   }
 
-  // ---------------- utils ----------------
+  // ===================== 설정 & 유틸 =====================
+
   async _getSettings() {
     let settings = defaultSettings;
     try {
@@ -44,17 +44,15 @@ export class VisionInterpreter {
     } catch {
       console.warn('⚠️ settings.js not found; using defaults');
     }
-    if (settings.use_real_camera == null) settings.use_real_camera = defaultSettings.use_real_camera;
-    if (!settings.camera_device) settings.camera_device = defaultSettings.camera_device;
     return settings;
   }
 
   async _ensureDirectory() {
     try { 
       await fs.mkdir(this.fp, { recursive: true }); 
-      console.log(`📁 Screenshots directory ensured: ${this.fp}`);
+      console.log(`📁 Screenshots directory: ${this.fp}`);
     } catch (e) { 
-      console.error('❌ Failed to create screenshots directory:', e); 
+      console.error('❌ Failed to create directory:', e); 
     }
   }
 
@@ -68,345 +66,255 @@ export class VisionInterpreter {
     }
   }
 
+  // ===================== 검증 함수들 =====================
+
   async _ensureNonEmptyFile(filepath) {
     try {
       await fs.access(filepath);
       const stats = await fs.stat(filepath);
-      if (!stats.isFile()) throw new Error('Captured path is not a file');
-      if (stats.size === 0) throw new Error('Captured file is empty');
       
-      // ✅ 파일 시그니처도 확인 (JPEG 또는 PNG)
+      if (!stats.isFile()) throw new Error('Not a file');
+      if (stats.size === 0) throw new Error('Empty file');
+      if (stats.size < 1000) throw new Error(`File too small: ${stats.size} bytes`);
+      
+      // JPEG 시그니처 확인
       const buffer = await fs.readFile(filepath);
       const isJPEG = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
       const isPNG = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
       
       if (!isJPEG && !isPNG) {
-        throw new Error('File is not a valid image format');
+        throw new Error('Not a valid image format');
       }
       
-      console.log(`✅ Image validated: ${path.basename(filepath)} (${(stats.size/1024).toFixed(1)} KB, ${isJPEG ? 'JPEG' : 'PNG'})`);
+      console.log(`✅ Image validated: ${path.basename(filepath)} (${(stats.size/1024).toFixed(1)} KB)`);
       return stats.size;
     } catch (error) {
-      console.error(`❌ File validation failed for ${filepath}:`, error.message);
+      console.error(`❌ File validation failed:`, error.message);
       throw error;
     }
   }
 
-  async _maybeCaptureIfEmpty() {
-    const latest = await this.getLatestImage();
-    if (latest) return latest;
-    const settings = await this._getSettings();
-    if (settings.use_real_camera) {
-      console.log('📸 No images found. Capturing a new snapshot…');
-      const shot = await this.captureFromWebcam(settings.camera_device);
-      return shot ?? null;
-    }
-    return null;
-  }
-
-  // ---------------- webcam (Windows/macOS 전용) ----------------
-  /**
-   * Capture one frame from webcam to JPEG
-   * @param {string} deviceName - Camera device name (optional)
-   * @returns {Promise<string|null>} saved filename or null
-   */
-  async captureFromWebcam(deviceName = null) {
-    if (this.vision_mode === 'off') return 'Vision is disabled.';
-
-    await this._ensureDirectory();
-    const timestamp = Date.now();
-    const filename = `webcam_${timestamp}.jpg`;
-    const filepath = path.join(this.fp, filename);
-
-    console.log(`📸 Starting webcam capture: ${filename}`);
-
+  // ✅ JPEG EOI 검사
+  async _ensureJPEGMarkers(filepath) {
     try {
-      if (process.platform === 'win32') {
-        await this._captureWebcamWindows(filepath, deviceName);
-      } else if (process.platform === 'darwin') {
-        await this._captureWebcamMac(filepath);
-      } else {
-        throw new Error(`Unsupported platform: ${process.platform}`);
+      const fd = await fs.open(filepath, 'r');
+      const buf = Buffer.alloc(2);
+      
+      // SOI 마커 (FF D8)
+      await fd.read(buf, 0, 2, 0);
+      const head = buf.toString('hex');
+      
+      // EOI 마커 (FF D9)
+      const size = (await fd.stat()).size;
+      await fd.read(buf, 0, 2, size - 2);
+      const tail = buf.toString('hex');
+      
+      await fd.close();
+      
+      if (head !== 'ffd8') {
+        throw new Error('JPEG SOI marker missing');
       }
-
-      const bytes = await this._ensureNonEmptyFile(filepath);
-      console.log(`✅ Webcam capture saved: ${filename} (${(bytes/1024).toFixed(1)} KB)`);
-      return filename;
-
+      
+      if (tail !== 'ffd9') {
+        throw new Error('JPEG EOI marker missing');
+      }
+      
+      console.log('✅ JPEG markers verified');
+      return true;
+      
     } catch (error) {
-      console.error('❌ Webcam capture failed:', error.message);
-      
-      // ✅ 실패한 파일이 있다면 삭제
-      try {
-        await fs.unlink(filepath);
-        console.log(`🗑️ Cleaned up failed capture: ${filename}`);
-      } catch (cleanupError) {
-        // 파일이 없거나 삭제 실패는 무시
-      }
-      
-      const latest = await this.getLatestImage();
-      if (latest) {
-        console.log(`📸 Using latest existing image: ${latest}`);
-        return latest;
-      }
-      return null;
+      console.error('❌ JPEG marker check failed:', error.message);
+      throw error;
     }
   }
 
-  // Windows 웹캠 캡처 (완전 개선 버전)
+  // ✅ Sharp 검증
+  async _validateImageWithSharp(filepath) {
+    try {
+      const sharp = (await import('sharp')).default;
+      
+      const metadata = await sharp(filepath).metadata();
+      console.log(`🔍 Sharp: ${metadata.format}, ${metadata.width}x${metadata.height}`);
+      
+      if (!metadata.format || !['jpeg', 'jpg', 'png'].includes(metadata.format)) {
+        throw new Error(`Invalid format: ${metadata.format}`);
+      }
+      
+      if (metadata.width < 100 || metadata.height < 100) {
+        throw new Error(`Too small: ${metadata.width}x${metadata.height}`);
+      }
+      
+      // 픽셀 읽기 테스트 (손상 감지)
+      await sharp(filepath).raw().toBuffer();
+      
+      console.log('✅ Sharp validation passed');
+      return true;
+      
+    } catch (error) {
+      console.error(`❌ Sharp validation failed:`, error.message);
+      return false;
+    }
+  }
+
+  // ===================== 📷 Webcam (VFW) =====================
+
   async _captureWebcamWindows(filepath, deviceName = null) {
-    const settings = await this._getSettings();
-    const finalDeviceName = deviceName || settings.camera_device || 'Integrated Camera';
-    
-    console.log('📸 Starting Windows webcam capture...');
+    console.log('📸 VFW capture starting...');
     
     const hasFFmpeg = await this._which('ffmpeg');
     if (!hasFFmpeg) {
-      throw new Error('❌ ffmpeg is not available. Please install: https://ffmpeg.org/download.html');
+      throw new Error('❌ ffmpeg not available');
     }
 
-    // ✅ 1단계: 사용 가능한 카메라 장치 목록 확인
-    let availableDevices = [];
-    try {
-      console.log('🔍 Detecting available cameras...');
-      const { stderr } = await execAsync('ffmpeg -list_devices true -f dshow -i dummy', {
-        timeout: 5000,
-        windowsHide: true
-      });
-      
-      // DirectShow 장치 목록 파싱
-      const videoDevices = stderr.match(/\[dshow.*?"([^"]+)"\s*\(video\)/gi) || [];
-      availableDevices = videoDevices.map(line => {
-        const match = line.match(/"([^"]+)"/);
-        return match ? match[1] : null;
-      }).filter(Boolean);
-      
-      if (availableDevices.length > 0) {
-        console.log(`✅ Found ${availableDevices.length} camera(s): ${availableDevices.join(', ')}`);
-      } else {
-        console.warn('⚠️ No cameras detected via DirectShow');
-      }
-    } catch (error) {
-      console.warn('⚠️ Could not list devices:', error.message);
-    }
-
-    // ✅ 2단계: 시도할 설정들 (우선순위 순서)
-    const configurations = [];
-
-    // 설정 1: 지정된 장치명으로 시도
-    if (availableDevices.length > 0) {
-      const targetDevice = availableDevices.find(d => 
-        d.toLowerCase().includes(finalDeviceName.toLowerCase())
-      ) || availableDevices[0];
-      
-      configurations.push({
-        name: `Device: "${targetDevice}"`,
-        args: [
-          '-f', 'dshow',
-          '-video_size', '1280x720',
-          '-framerate', '30',
-          '-i', `video=${targetDevice}`,
-          '-frames:v', '1',
-          '-q:v', '2',
-          '-f', 'image2',
-          filepath
-        ]
-      });
-    }
-
-    // 설정 2: 간단한 장치명 방식
-    configurations.push({
-      name: `Simple device name`,
-      args: [
-        '-f', 'dshow',
-        '-i', `video=${finalDeviceName}`,
-        '-vframes', '1',
-        '-q:v', '3',
-        filepath
-      ]
-    });
-
-    // 설정 3: 장치 인덱스 (0번)
-    configurations.push({
-      name: 'Device index 0',
-      args: [
-        '-f', 'dshow',
-        '-i', 'video=0',
-        '-vframes', '1',
-        filepath
-      ]
-    });
-
-    // 설정 4: VFW (Video for Windows) 폴백
-    configurations.push({
-      name: 'VFW backend',
-      args: [
-        '-f', 'vfwcap',
-        '-i', '0',
-        '-frames:v', '1',
-        filepath
-      ]
-    });
-
-    // ✅ 3단계: 각 설정 순차 시도
+    // VFW만 사용 (카메라 0, 1 시도)
+    const cameraIndices = [0, 1];
     let lastError;
     
-    for (let i = 0; i < configurations.length; i++) {
-      const { name, args } = configurations[i];
-      
+    for (const index of cameraIndices) {
       try {
-        console.log(`\n📸 Attempt ${i + 1}/${configurations.length}: ${name}`);
-        console.log(`   Command: ffmpeg ${args.join(' ')}`);
+        console.log(`📸 Trying VFW camera ${index}...`);
         
-        // 이전 실패 파일 제거
-        try {
-          await fs.unlink(filepath);
-        } catch (e) {
-          // 파일이 없으면 무시
+        // 이전 파일 삭제
+        try { 
+          await fs.unlink(filepath); 
+        } catch (e) {}
+        
+        // VFW 캡처
+        await execAsync(
+          `ffmpeg -y -f vfwcap -i ${index} -frames:v 1 "${filepath}"`, 
+          {
+            timeout: 10000,
+            windowsHide: true
+          }
+        );
+        
+        // 파일 완성 대기
+        await new Promise(r => setTimeout(r, 800));
+        
+        // 파일 존재 확인
+        const stats = await fs.stat(filepath);
+        if (stats.size < 1000) {
+          throw new Error(`File too small: ${stats.size} bytes`);
         }
-
-        // ffmpeg 실행
-        await execAsync(`ffmpeg -y ${args.join(' ')}`, {
-          timeout: 25000,
-          windowsHide: true,
-          maxBuffer: 1024 * 1024 * 10 // 10MB
-        });
-
-        // ✅ 파일 완성 대기 (중요!)
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        // ✅ 파일 검증
-        try {
-          const stats = await fs.stat(filepath);
-          
-          if (!stats.isFile()) {
-            throw new Error('Not a file');
-          }
-          
-          if (stats.size < 1000) {
-            throw new Error(`File too small (${stats.size} bytes)`);
-          }
-
-          // 이미지 시그니처 검증
-          const buffer = await fs.readFile(filepath);
-          const isJPEG = buffer[0] === 0xFF && buffer[1] === 0xD8;
-          const isPNG = buffer[0] === 0x89 && buffer[1] === 0x50;
-          
-          if (!isJPEG && !isPNG) {
-            throw new Error('Invalid image format');
-          }
-
-          console.log(`✅ SUCCESS: ${name}`);
-          console.log(`   File: ${(stats.size / 1024).toFixed(1)} KB, ${isJPEG ? 'JPEG' : 'PNG'}`);
-          return; // 성공!
-
-        } catch (validationError) {
-          throw new Error(`Validation failed: ${validationError.message}`);
-        }
-
+        
+        console.log(`✅ VFW camera ${index} success (${(stats.size/1024).toFixed(1)} KB)`);
+        return;
+        
       } catch (error) {
         lastError = error;
-        const errorMsg = error.stderr || error.message;
-        console.warn(`❌ Failed: ${errorMsg.substring(0, 200)}`);
-        
-        // 실패한 파일 정리
-        try {
-          await fs.unlink(filepath);
-        } catch (e) {
-          // 무시
-        }
-
-        // 다음 시도 전 대기
-        if (i < configurations.length - 1) {
-          console.log('   ⏳ Waiting 2s before next attempt...');
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
+        console.warn(`❌ VFW camera ${index} failed:`, error.message);
       }
     }
-
-    // ✅ 모든 시도 실패
-    throw new Error(
-      `All ${configurations.length} configurations failed.\n` +
-      `Last error: ${lastError?.message || 'Unknown'}\n` +
-      `Available cameras: ${availableDevices.length ? availableDevices.join(', ') : 'none detected'}\n` +
-      `Please check:\n` +
-      `1. Camera is connected and not in use\n` +
-      `2. ffmpeg is properly installed\n` +
-      `3. Camera permissions are granted`
-    );
+    
+    throw new Error(`All VFW cameras failed. Last: ${lastError?.message}`);
   }
 
-  // macOS 웹캠 캡처
   async _captureWebcamMac(filepath) {
     const hasImageSnap = await this._which('imagesnap');
     if (!hasImageSnap) {
-      throw new Error('❌ imagesnap is not installed on macOS (brew install imagesnap)');
+      throw new Error('❌ imagesnap not installed (brew install imagesnap)');
     }
     
-    console.log('📸 Using imagesnap for macOS...');
+    console.log('📸 Using imagesnap...');
     try {
       await execFileAsync('imagesnap', [filepath], { timeout: 10000 });
-      console.log('✅ imagesnap capture successful');
+      console.log('✅ imagesnap success');
     } catch (error) {
       throw new Error(`❌ imagesnap failed: ${error.message}`);
     }
   }
 
-  // ✅ 카메라 장치 목록 확인 메서드
-  async listCameraDevices() {
-    if (process.platform !== 'win32') {
-      return 'This feature is only available on Windows';
-    }
+  async captureFromWebcam(deviceName = null) {
+    if (this.vision_mode === 'off') return null;
 
-    try {
-      const { stderr } = await execAsync('ffmpeg -list_devices true -f dshow -i dummy', {
-        timeout: 5000,
-        windowsHide: true
-      });
+    await this._ensureDirectory();
+    const maxRetries = 3;
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const timestamp = Date.now();
+      const filename = `webcam_${timestamp}.jpg`;
+      const filepath = path.join(this.fp, filename);
       
-      const lines = stderr.split('\n');
-      const videoDevices = [];
-      let inVideoSection = false;
-      
-      for (const line of lines) {
-        if (line.includes('DirectShow video devices')) {
-          inVideoSection = true;
-          continue;
+      try {
+        console.log(`\n📸 Capture attempt ${attempt}/${maxRetries}`);
+        
+        // 2차 시도부터 대기 (카메라 안정화)
+        if (attempt > 1) {
+          console.log('⏳ Waiting 1.5s for camera...');
+          await new Promise(r => setTimeout(r, 1500));
         }
-        if (line.includes('DirectShow audio devices')) {
-          break;
+        
+        // 캡처 실행
+        if (process.platform === 'win32') {
+          await this._captureWebcamWindows(filepath, deviceName);
+        } else if (process.platform === 'darwin') {
+          await this._captureWebcamMac(filepath);
+        } else {
+          throw new Error(`Unsupported platform: ${process.platform}`);
         }
-        if (inVideoSection && line.includes('"')) {
-          const match = line.match(/"([^"]+)"/);
-          if (match) {
-            videoDevices.push(match[1]);
+        
+        // 파일 안정화 대기
+        await new Promise(r => setTimeout(r, 1000));
+        
+        // ✅ 3단계 검증
+        await this._ensureNonEmptyFile(filepath);
+        await this._ensureJPEGMarkers(filepath);
+        
+        const isValid = await this._validateImageWithSharp(filepath);
+        if (!isValid) {
+          throw new Error('Sharp validation failed');
+        }
+        
+        console.log(`✅ Capture successful: ${filename}`);
+        return filename;
+        
+      } catch (error) {
+        lastError = error;
+        console.error(`❌ Attempt ${attempt}/${maxRetries} failed:`, error.message);
+        
+        // 실패한 파일 삭제
+        try {
+          await fs.unlink(filepath);
+          console.log(`🗑️ Cleaned failed file`);
+        } catch (e) {}
+        
+        if (attempt === maxRetries) {
+          console.error(`❌ All attempts exhausted`);
+          
+          // 폴백: 기존 이미지 사용
+          const latest = await this.getLatestImage();
+          if (latest) {
+            console.log(`📸 Using existing image: ${latest}`);
+            return latest;
           }
+          return null;
         }
       }
-      
-      return videoDevices.length > 0
-        ? `Available cameras:\n${videoDevices.map((d, i) => `  ${i + 1}. ${d}`).join('\n')}`
-        : 'No cameras detected';
-        
-    } catch (error) {
-      return `Failed to list cameras: ${error.message}`;
     }
+    
+    return null;
   }
 
-  // ---------------- analysis ----------------
+  // ===================== 이미지 분석 =====================
+
   async analyzeImage(filename, prompt = 'Describe what you see in this image.') {
     if (!filename) return 'Error: No filename provided.';
     const filepath = path.join(this.fp, filename);
     
     try {
       const buf = await fs.readFile(filepath);
-      if (!buf || buf.length === 0) return `Error: Image file '${filename}' is empty.`;
+      if (!buf || buf.length === 0) {
+        return `Error: Image file '${filename}' is empty.`;
+      }
       
-      console.log(`🔍 Analyzing image: ${filename} (${(buf.length / 1024).toFixed(1)} KB)`);
+      console.log(`🔍 Analyzing: ${filename} (${(buf.length / 1024).toFixed(1)} KB)`);
       return await this.agent.prompter.promptVision(buf, prompt);
     } catch (error) {
-      if (error.code === 'ENOENT') return `Error: Image file '${filename}' not found in ${this.fp}`;
-      console.error('❌ Failed to analyze image:', error);
+      if (error.code === 'ENOENT') {
+        return `Error: Image file '${filename}' not found`;
+      }
+      console.error('❌ Analysis failed:', error);
       return `Image analysis failed: ${error.message}`;
     }
   }
@@ -415,25 +323,28 @@ export class VisionInterpreter {
     if (this.vision_mode === 'off') return 'Vision is disabled.';
     
     try {
-      if (!imageBuffer || imageBuffer.length === 0) throw new Error('Empty image buffer');
-      console.log(`🔍 Analyzing image buffer (${(imageBuffer.length / 1024).toFixed(1)} KB)`);
+      if (!imageBuffer || imageBuffer.length === 0) {
+        throw new Error('Empty image buffer');
+      }
+      console.log(`🔍 Analyzing buffer (${(imageBuffer.length / 1024).toFixed(1)} KB)`);
       return await this.agent.prompter.promptVision(imageBuffer, prompt);
     } catch (error) {
-      console.error('❌ Failed to analyze image buffer:', error);
+      console.error('❌ Buffer analysis failed:', error);
       return `Image analysis failed: ${error.message}`;
     }
   }
 
-  // ---------------- file helpers ----------------
+  // ===================== 파일 관리 =====================
+
   async listImages() {
     try {
       await this._ensureDirectory();
       const files = await fs.readdir(this.fp);
       const imageFiles = files.filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f));
-      console.log(`📂 Found ${imageFiles.length} images in ${this.fp}`);
+      console.log(`📂 Found ${imageFiles.length} images`);
       return imageFiles;
     } catch (error) {
-      console.error('❌ Failed to list images:', error);
+      console.error('❌ List failed:', error);
       return [];
     }
   }
@@ -442,7 +353,7 @@ export class VisionInterpreter {
     try {
       const files = await this.listImages();
       if (files.length === 0) {
-        console.warn(`📸 No images found in ${this.fp}`);
+        console.warn(`📸 No images in ${this.fp}`);
         return null;
       }
       
@@ -452,7 +363,6 @@ export class VisionInterpreter {
             const stats = await fs.stat(path.join(this.fp, f));
             return { name: f, mtime: stats.mtime, size: stats.size };
           } catch (error) {
-            console.warn(`⚠️ Could not stat file ${f}:`, error.message);
             return null;
           }
         })
@@ -460,21 +370,20 @@ export class VisionInterpreter {
       
       const validFiles = filesWithStats.filter(f => f !== null && f.size > 0);
       if (validFiles.length === 0) {
-        console.warn('📸 No valid image files found');
+        console.warn('📸 No valid images');
         return null;
       }
       
       validFiles.sort((a, b) => b.mtime - a.mtime);
       const latest = validFiles[0].name;
-      console.log(`📸 Latest image: ${latest} (${(validFiles[0].size/1024).toFixed(1)} KB)`);
+      console.log(`📸 Latest: ${latest} (${(validFiles[0].size/1024).toFixed(1)} KB)`);
       return latest;
     } catch (error) {
-      console.error('❌ Failed to get latest image:', error);
+      console.error('❌ Get latest failed:', error);
       return null;
     }
   }
 
-  // ✅ 오래된 이미지 파일 정리
   async cleanupOldImages(maxFiles = 10) {
     try {
       const files = await this.listImages();
@@ -493,105 +402,136 @@ export class VisionInterpreter {
       for (const file of filesToDelete) {
         try {
           await fs.unlink(path.join(this.fp, file.name));
-          console.log(`🗑️ Cleaned up old image: ${file.name}`);
+          console.log(`🗑️ Deleted: ${file.name}`);
         } catch (error) {
-          console.warn(`⚠️ Failed to delete ${file.name}:`, error.message);
+          console.warn(`⚠️ Delete failed: ${file.name}`);
         }
       }
       
       if (filesToDelete.length > 0) {
-        console.log(`🧹 Cleaned up ${filesToDelete.length} old images`);
+        console.log(`🧹 Cleaned ${filesToDelete.length} images`);
       }
     } catch (error) {
-      console.error('❌ Failed to cleanup old images:', error);
+      console.error('❌ Cleanup failed:', error);
     }
   }
 
-  // ---------------- high-level helpers ----------------
+  // ===================== High-level API =====================
+
   async takeSnapshot() {
     const settings = await this._getSettings();
     if (this.vision_mode === 'off') return 'Vision is disabled.';
-    if (!settings?.use_real_camera) return 'Real camera is disabled in settings.';
     
-    // ✅ 캡처 전 정리
+    if (!settings.use_real_camera) {
+      return 'Camera is disabled in settings.';
+    }
+    
     await this.cleanupOldImages(5);
     
     const fname = await this.captureFromWebcam();
-    return fname ? `Captured: ${fname}` : 'Capture failed (no device or tool).';
+    return fname ? `Captured: ${fname}` : 'Capture failed';
   }
 
   async lookAtPlayer(player_name, direction) {
     if (this.vision_mode === 'off') return 'Vision is disabled.';
     
-    const latestImage = await this._maybeCaptureIfEmpty();
+    let latestImage = await this.getLatestImage();
+    
+    // 이미지 없으면 새로 캡처
     if (!latestImage) {
-      return 'No images available and webcam capture failed or disabled. Enable use_real_camera or put an image in the screenshots folder.';
+      console.log('📸 No existing image, capturing...');
+      await this.takeSnapshot();
+      latestImage = await this.getLatestImage();
+      
+      if (!latestImage) {
+        return 'Failed to capture image';
+      }
     }
     
     this.agent.latestScreenshotPath = latestImage;
-    let result = `Using latest image: ${latestImage}\n`;
+    let result = `Looking at player ${player_name}...\n`;
     
     if (this.vision_mode === 'prompted') {
       try {
-        const analysis = await this.analyzeImage(latestImage, `Looking at player ${player_name}. Describe what you see.`);
-        return result + `Image analysis: "${analysis}"`;
+        const analysis = await this.analyzeImage(
+          latestImage, 
+          `Looking at player ${player_name}. Describe what you see.`
+        );
+        return result + `\nAnalysis: ${analysis}`;
       } catch (error) {
-        return result + `Analysis failed: ${error.message}`;
+        return result + `\nAnalysis failed: ${error.message}`;
       }
     } else if (this.vision_mode === 'always') {
-      return result + 'Screenshot reference stored for context.';
+      return result + 'Screenshot stored for context.';
     }
     
-    return 'Error: Unknown vision mode.';
+    return 'Vision mode not configured';
   }
 
   async lookAtPosition(x, y, z) {
     if (this.vision_mode === 'off') return 'Vision is disabled.';
     
-    const latestImage = await this._maybeCaptureIfEmpty();
+    let latestImage = await this.getLatestImage();
+    
     if (!latestImage) {
-      return 'No images available and webcam capture failed or disabled. Enable use_real_camera or put an image in the screenshots folder.';
+      console.log('📸 No existing image, capturing...');
+      await this.takeSnapshot();
+      latestImage = await this.getLatestImage();
+      
+      if (!latestImage) {
+        return 'Failed to capture image';
+      }
     }
     
     this.agent.latestScreenshotPath = latestImage;
-    let result = `Using latest image: ${latestImage}\n`;
+    let result = `Looking at position (${x}, ${y}, ${z})...\n`;
     
     if (this.vision_mode === 'prompted') {
       try {
-        const analysis = await this.analyzeImage(latestImage, `Looking at position (${x}, ${y}, ${z}). Describe what you see.`);
-        return result + `Image analysis: "${analysis}"`;
+        const analysis = await this.analyzeImage(
+          latestImage,
+          `Looking at position (${x}, ${y}, ${z}). Describe what you see.`
+        );
+        return result + `\nAnalysis: ${analysis}`;
       } catch (error) {
-        return result + `Analysis failed: ${error.message}`;
+        return result + `\nAnalysis failed: ${error.message}`;
       }
     } else if (this.vision_mode === 'always') {
-      return result + 'Screenshot reference stored for context.';
+      return result + 'Screenshot stored for context.';
     }
     
-    return 'Error: Unknown vision mode.';
+    return 'Vision mode not configured';
   }
 
   async captureFullView() {
     if (this.vision_mode === 'off') return 'Vision is disabled.';
     
-    const latestImage = await this._maybeCaptureIfEmpty();
+    let latestImage = await this.getLatestImage();
+    
     if (!latestImage) {
-      return 'No images available and webcam capture failed or disabled. Enable use_real_camera or put an image in the screenshots folder.';
+      console.log('📸 No existing image, capturing...');
+      await this.takeSnapshot();
+      latestImage = await this.getLatestImage();
+      
+      if (!latestImage) {
+        return 'Failed to capture image';
+      }
     }
     
     this.agent.latestScreenshotPath = latestImage;
-    let result = `Using latest image: ${latestImage}\n`;
+    let result = 'Capturing full view...\n';
     
     if (this.vision_mode === 'prompted') {
       try {
         const analysis = await this.analyzeImage(latestImage);
-        return result + `Image analysis: "${analysis}"`;
+        return result + `\nAnalysis: ${analysis}`;
       } catch (error) {
-        return result + `Analysis failed: ${error.message}`;
+        return result + `\nAnalysis failed: ${error.message}`;
       }
     } else if (this.vision_mode === 'always') {
-      return result + 'Screenshot reference stored for context.';
+      return result + 'Screenshot stored for context.';
     }
     
-    return 'Error: Unknown vision mode.';
+    return 'Vision mode not configured';
   }
 }
