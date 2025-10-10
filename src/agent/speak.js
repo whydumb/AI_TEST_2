@@ -8,6 +8,11 @@ export const ttsEvents = new EventEmitter();
 let speakingQueue = [];
 let isSpeaking = false;
 
+// ✅ TTS 상태를 외부에서 확인할 수 있도록 export
+export function isTTSSpeaking() {
+  return isSpeaking;
+}
+
 // --- 로봇 컨트롤러 인스턴스 관리 (speak.js에서 직접) ---
 let robotController = null;
 let robotInitialized = false;
