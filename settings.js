@@ -35,13 +35,15 @@ const settings = {
   "only_chat_with": [], // users that the bots listen to and send general messages to. if empty it will chat publicly
 
   "language": "en", // translate to/from this language. NOT text-to-speech language. Supports these language names: https://cloud.google.com/translate/docs/languages
-  "use_real_camera": false,
-  "camera_device": "/dev/video0",
+  "show_bot_views": false, // show bot's view in browser at localhost:3000, 3001...
 
   "allow_insecure_coding": false, // allows newAction command and model can write/run code on your computer. enable at own risk
-  "allow_vision": false, // allows vision model to interpret screenshots as inputs
-  "vision_mode": "off", // "off", "prompted", or "always"
-  "blocked_actions": ["!checkBlueprint", "!checkBlueprintLevel", "!getBlueprint", "!getBlueprintLevel"], // commands to disable and remove from docs. Ex: ["!setMode"]
+  "allow_vision": true, // allows vision model to interpret screenshots as inputs
+  "use_real_camera": true,  // 웹캠 사용
+  "camera_device": "/dev/video0",  // Linux/Mac 카메라 경로
+  "vision_mode": "always",  // 또는 "prompted" 
+
+ "blocked_actions": ["!checkBlueprint", "!checkBlueprintLevel", "!getBlueprint", "!getBlueprintLevel"], // commands to disable and remove from docs. Ex: ["!setMode"]
   "code_timeout_mins": -1, // minutes code is allowed to run. -1 for no timeout
   "relevant_docs_count": 5, // number of relevant code function docs to select for prompting. -1 for all
 
@@ -64,7 +66,7 @@ const settings = {
 
   "stt_transcription": true, // enable speech-to-text transcription
   "stt_provider": "pollinations", // STT provider: "groq" (requires API key) or "pollinations" (free)
-  "stt_username": "FAX", // username for STT messages
+  "stt_username": "koreayang", // username for STT messages
   "stt_agent_name": "claude", // agent name for STT messages, if empty it will send the STT to all bots
 
   // STT Audio Detection Settings
