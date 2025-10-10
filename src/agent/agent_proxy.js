@@ -43,10 +43,9 @@ class AgentServerProxy {
             this.agent.cleanKill();
         });
 		
-		this.socket.on('send-message', (senderName, message) => {
+		this.socket.on('send-message', (agentName, message) => {
 			try {
-				// senderName을 그대로 사용 ('FAX' 또는 'web-client')
-				this.agent.respondFunc(senderName, message);
+				this.agent.respondFunc("web-client", message);
 			} catch (error) {
 				console.error('Error: ', JSON.stringify(error, Object.getOwnPropertyNames(error)));
 			}
