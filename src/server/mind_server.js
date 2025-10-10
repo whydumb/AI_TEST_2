@@ -155,22 +155,18 @@ export function createMindServer(port = 8080) {
             }, 2000);
         });
 
-		// ✅ 수정 후
-		socket.on('send-message', (agentName, message, username) => {
+		socket.on('send-message', (agentName, message) => {
 			if (!inGameAgents[agentName]) {
 				console.warn(`Agent ${agentName} not logged in, cannot send message via MindServer.`);
 				return
 			}
 			try {
-				// username이 제공되면 사용, 아니면 'web-client'
-				const senderName = username || 'web-client';
-        
-				console.log(`Sending message to agent ${agentName} from ${senderName}: ${message}`);
-				inGameAgents[agentName].emit('send-message', senderName, message);
-        
+				console.log(`Sending message to agent ${agentName}: ${message}`);
+				inGameAgents[agentName].emit('send-message', agentName, message);
+				
 				// Track message in analytics
 				const messageData = {
-					from: senderName,  // ✅ 변경
+					from: 'web-client',
 					to: agentName,
 					message: message,
 					type: 'command'
