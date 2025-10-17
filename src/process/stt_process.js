@@ -11,12 +11,15 @@ import { getIO, getAllInGameAgentNames } from '../server/mind_server.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-// Import the audio libraries conditionally
+
+// ✅ TTS 상태를 전역으로 관리 (더 안전함)
+global.isTTSPlaying = false;
+
 let portAudio;
 let AudioIO;
 let SampleFormat16Bit;
-let mic; // For mic library
-let activeAudioLibrary = null; // 'naudiodon' or 'mic'
+let mic;
+let activeAudioLibrary = null;
 
 (async () => {
     try {
@@ -42,14 +45,13 @@ let activeAudioLibrary = null; // 'naudiodon' or 'mic'
         AudioIO = null;
         SampleFormat16Bit = null;
 
-        // Attempt to load mic if naudiodon fails
         try {
             const micModule = await import('mic');
-            mic = micModule.default; // Assuming mic is also a CommonJS module typically
-            if (mic && typeof mic === 'function') { // mic is often a constructor function
+            mic = micModule.default;
+            if (mic && typeof mic === 'function') {
                  activeAudioLibrary = 'mic';
                  console.log('[STT] mic loaded successfully as an alternative.');
-            } else if (micModule.Mic) { // Some modules might export it as Mic
+            } else if (micModule.Mic) {
                 mic = micModule.Mic;
                 activeAudioLibrary = 'mic';
                 console.log('[STT] mic (Mic) loaded successfully as an alternative.');
@@ -63,21 +65,14 @@ let activeAudioLibrary = null; // 'naudiodon' or 'mic'
             activeAudioLibrary = null;
         }
     }
-    // Initialize STT after attempting to load audio libraries
     initSTT();
 })();
 
-
-/**
- * Delete leftover speech_*.wav from previous runs
- */
 const leftover = fs.readdirSync(__dirname).filter(f => /^speech_\d+\.wav$/.test(f));
 for (const file of leftover) {
   try {
     fs.unlinkSync(path.join(__dirname, file));
-  } catch (_) {
-    // ignore errors
-  }
+  } catch (_) {}
 }
 
 // Configuration from settings
@@ -89,6 +84,8 @@ const DEBUG_AUDIO = settings.stt_debug_audio || false;
 const COOLDOWN_MS = settings.stt_cooldown_ms || 2000;
 const SPEECH_THRESHOLD_RATIO = settings.stt_speech_threshold_ratio || 0.15;
 const CONSECUTIVE_SPEECH_SAMPLES = settings.stt_consecutive_speech_samples || 5;
+// ✅ TTS 후 추가 대기 시간
+const TTS_COOLDOWN_MS = settings.stt_tts_cooldown || 3000;
 const SAMPLE_RATE = 16000;
 const BIT_DEPTH = 16;
 const STT_USERNAME = settings.stt_username || "SERVER";
@@ -100,8 +97,22 @@ let isRecording = false;
 let sttRunning = false;
 let sttInitialized = false;
 let lastRecordingEndTime = 0;
+// ✅ TTS 종료 시간 추적
+let lastTTSEndTime = 0;
 
 async function recordAndTranscribeOnce() {
+  // ✅ TTS 재생 중이거나 최근에 종료되었으면 녹음하지 않음
+  if (global.isTTSPlaying) {
+    if (DEBUG_AUDIO) console.log('[STT] Skipping - TTS is playing');
+    return null;
+  }
+  
+  const timeSinceTTS = Date.now() - lastTTSEndTime;
+  if (timeSinceTTS < TTS_COOLDOWN_MS) {
+    if (DEBUG_AUDIO) console.log(`[STT] Skipping - TTS cooldown (${TTS_COOLDOWN_MS - timeSinceTTS}ms remaining)`);
+    return null;
+  }
+
   // Check cooldown period
   const timeSinceLastRecording = Date.now() - lastRecordingEndTime;
   if (timeSinceLastRecording < COOLDOWN_MS) {
@@ -146,8 +157,7 @@ async function recordAndTranscribeOnce() {
   // Helper to reset silence timer
   function resetSilenceTimer() {
     if (silenceTimer) clearTimeout(silenceTimer);
-    // Only start silence timer if actual speech has been detected
-    if (hasHeardSpeech && recording) { // also check `recording` to prevent timer after explicit stop
+    if (hasHeardSpeech && recording) {
         silenceTimer = setTimeout(() => {
             if (DEBUG_AUDIO) console.log('[STT] Silence timeout reached, stopping recording.');
             stopRecording();
@@ -166,15 +176,11 @@ async function recordAndTranscribeOnce() {
     if (activeAudioLibrary === 'naudiodon' && audioInterface) {
       try {
         audioInterface.quit();
-      } catch (err) {
-        // Silent error handling
-      }
+      } catch (err) {}
     } else if (activeAudioLibrary === 'mic' && audioInterface) {
       try {
         audioInterface.stop();
-      } catch (err) {
-        // Silent error handling
-      }
+      } catch (err) {}
     }
 
     if (fileWriter && !fileWriter.closed) {
@@ -182,9 +188,7 @@ async function recordAndTranscribeOnce() {
     }
   }
 
-  // We wrap everything in a promise so we can await the transcription
   return new Promise((resolve, reject) => {
-    // Set maximum recording duration timer
     maxDurationTimer = setTimeout(() => {
       stopRecording();
     }, MAX_AUDIO_DURATION * 1000);
@@ -217,7 +221,7 @@ async function recordAndTranscribeOnce() {
         endian: 'little',
         encoding: 'signed-integer',
         device: 'default',
-        debug: false // Don't use mic's debug, we have our own
+        debug: false
       });
       audioStream = audioInterface.getAudioStream();
 
@@ -225,14 +229,19 @@ async function recordAndTranscribeOnce() {
         cleanupAndResolve(null);
       });
 
-      audioStream.on('processExitComplete', () => {
-        // Silent
-      });
+      audioStream.on('processExitComplete', () => {});
     }
 
-    // Common event handling for data (applies to both naudiodon ai and micStream)
+    // Common event handling for data
     audioStream.on('data', (chunk) => {
       if (!recording) return;
+      
+      // ✅ 데이터 처리 중에도 TTS 체크 (가장 중요!)
+      if (global.isTTSPlaying) {
+        if (DEBUG_AUDIO) console.log('[STT] Stopping recording - TTS started');
+        stopRecording();
+        return;
+      }
 
       fileWriter.write(chunk);
 
@@ -246,25 +255,21 @@ async function recordAndTranscribeOnce() {
       const rms = Math.sqrt(sumSquares / sampleCount);
       totalSampleCount++;
 
-      // Simplified speech detection logic
       if (rms > adaptiveThreshold) {
         speechSampleCount++;
         consecutiveSpeechSamples++;
         speechLevels.push(rms);
         
-        // Update adaptive threshold based on actual speech levels
         if (speechLevels.length > 10) {
           averageSpeechLevel = speechLevels.reduce((a, b) => a + b, 0) / speechLevels.length;
-          adaptiveThreshold = Math.max(RMS_THRESHOLD, averageSpeechLevel * 0.4); // 40% of average speech level
+          adaptiveThreshold = Math.max(RMS_THRESHOLD, averageSpeechLevel * 0.4);
         }
         
-        // Trigger speech detection much more easily
         if (!hasHeardSpeech) {
-          // Either consecutive samples OR sufficient ratio
           const speechRatio = speechSampleCount / totalSampleCount;
-          if (consecutiveSpeechSamples >= 3 || speechRatio >= 0.05) { // Much lower thresholds
+          if (consecutiveSpeechSamples >= 3 || speechRatio >= 0.05) {
             hasHeardSpeech = true;
-            console.log(`[STT] Speech detected! (consecutive: ${consecutiveSpeechSamples}, ratio: ${(speechRatio * 100).toFixed(1)}%)`);
+            if (DEBUG_AUDIO) console.log(`[STT] Speech detected! (consecutive: ${consecutiveSpeechSamples}, ratio: ${(speechRatio * 100).toFixed(1)}%)`);
           }
         }
         
@@ -272,7 +277,7 @@ async function recordAndTranscribeOnce() {
           resetSilenceTimer();
         }
       } else {
-        consecutiveSpeechSamples = 0; // Reset consecutive counter
+        consecutiveSpeechSamples = 0;
       }
     });
 
@@ -298,7 +303,7 @@ async function recordAndTranscribeOnce() {
           return;
         }
 
-        if (!hasHeardSpeech || speechPercentage < 3) { // Lowered from 15% to 3%
+        if (!hasHeardSpeech || speechPercentage < 3) {
           cleanupAndResolve(null);
           return;
         }
@@ -309,13 +314,12 @@ async function recordAndTranscribeOnce() {
           const pollinationsSTT = new PollinationsSTT();
           text = await pollinationsSTT.transcribe(outFile);
         } else {
-          // Default to Groq
+          // ✅ Groq STT - 한국어 지원으로 수정
           const groqSTT = new GroqCloudSTT();
           text = await groqSTT.transcribe(outFile, {
-            model: "distil-whisper-large-v3-en",
-            prompt: "",
+            model: "whisper-large-v3-turbo",  // 다국어 지원 모델
             response_format: "json",
-            language: "en",
+            language: "ko",  // 한국어
             temperature: 0.0
           });
         }
@@ -326,12 +330,12 @@ async function recordAndTranscribeOnce() {
         }
 
         // Enhanced validation
-        if (!/[A-Za-z]/.test(text)) {
+        if (!/[A-Za-z가-힣]/.test(text)) {  // 한글 범위 추가
           cleanupAndResolve(null);
           return;
         }
 
-        if (/([A-Za-z])\1{3,}/.test(text)) {
+        if (/([A-Za-z가-힣])\1{3,}/.test(text)) {
           cleanupAndResolve(null);
           return;
         }
@@ -343,16 +347,15 @@ async function recordAndTranscribeOnce() {
           return;
         }
 
-        const letterCount = text.replace(/[^A-Za-z]/g, "").length;
+        const letterCount = text.replace(/[^A-Za-z가-힣]/g, "").length;  // 한글 범위 추가
         const normalizedText = text.trim().toLowerCase();
-        const allowedGreetings = new Set(["hi", "hello", "hey", "yes", "no", "okay"]);
+        const allowedGreetings = new Set(["hi", "hello", "hey", "yes", "no", "okay", "안녕", "네", "아니오"]);  // 한국어 추가
 
         if (letterCount < 2 && !allowedGreetings.has(normalizedText)) {
           cleanupAndResolve(null);
           return;
         }
 
-        // Only log successful transcriptions
         console.log("[STT] Transcribed:", text);
 
         const finalMessage = `[${STT_USERNAME}] ${text}`;
@@ -380,9 +383,7 @@ async function recordAndTranscribeOnce() {
         if (fs.existsSync(outFile)) {
           fs.unlinkSync(outFile);
         }
-      } catch (err) {
-        // Silent cleanup
-      }
+      } catch (err) {}
 
       if (audioStream && typeof audioStream.removeAllListeners === 'function') {
         audioStream.removeAllListeners();
@@ -408,9 +409,6 @@ async function recordAndTranscribeOnce() {
   });
 }
 
-/**
- * Runs recording sessions sequentially, so only one at a time
- */
 async function continuousLoop() {
   if (!activeAudioLibrary) {
     console.warn("[STT] No audio recording library available. STT disabled.");
@@ -427,7 +425,6 @@ async function continuousLoop() {
       const result = await recordAndTranscribeOnce();
       consecutiveErrors = 0;
       
-      // Longer delay between recordings
       if (sttRunning) {
         await new Promise(res => setTimeout(res, 1000));
       }
@@ -456,7 +453,7 @@ export function initSTT() {
   }
 
   if (!activeAudioLibrary) {
-    console.warn("[STT] No audio recording library available (naudiodon or mic failed to load). STT functionality cannot be initialized.");
+    console.warn("[STT] No audio recording library available. STT functionality cannot be initialized.");
     sttRunning = false;
     return;
   }
@@ -469,10 +466,8 @@ export function initSTT() {
   console.log("[STT] Initializing STT...");
   console.log(`[STT] Using provider: ${STT_PROVIDER}`);
   
-  // Validate provider choice
   if (!["groq", "pollinations"].includes(STT_PROVIDER)) {
-    console.warn(`[STT] Unknown STT provider: ${STT_PROVIDER}. Defaulting to pollinations.`);
-    STT_PROVIDER = 'pollinations';
+    console.warn(`[STT] Unknown STT provider: ${STT_PROVIDER}. Defaulting to groq.`);
   }
   
   sttRunning = true;
@@ -485,4 +480,15 @@ export function initSTT() {
       sttInitialized = false;
     });
   }, 2000);
+}
+
+// ✅ TTS 상태 업데이트 함수 export
+export function setTTSPlaying(playing) {
+  global.isTTSPlaying = playing;
+  if (!playing) {
+    lastTTSEndTime = Date.now();
+    if (DEBUG_AUDIO) console.log('[STT] TTS ended - recording can resume after cooldown');
+  } else {
+    if (DEBUG_AUDIO) console.log('[STT] TTS started - pausing STT');
+  }
 }
