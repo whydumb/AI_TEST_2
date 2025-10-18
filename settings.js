@@ -29,7 +29,7 @@ const settings = {
     // using more than 1 profile requires you to /msg each bot indivually
     // individual profiles override values from the base profile
   ],
-  "plugins": [], // you can add plugins here, e.g. pre-installed plugin: "Dance"
+  "plugins": ["Dance"], // you can add plugins here, e.g. pre-installed plugin: "Dance"
   "load_memory": false, // load memory from previous session
   "init_message": "Respond with hello world and your name", // sends to all on spawn
   "only_chat_with": [], // users that the bots listen to and send general messages to. if empty it will chat publicly
@@ -38,10 +38,10 @@ const settings = {
   "show_bot_views": false, // show bot's view in browser at localhost:3000, 3001...
 
   "allow_insecure_coding": false, // allows newAction command and model can write/run code on your computer. enable at own risk
-  "allow_vision": true, // allows vision model to interpret screenshots as inputs
+  "allow_vision": false, // allows vision model to interpret screenshots as inputs
   "use_real_camera": true,  // 웹캠 사용
   "camera_device": "/dev/video0",  // Linux/Mac 카메라 경로
-  "vision_mode": "always",  // 또는 "prompted" 
+  "vision_mode": "off",  // 또는 "prompted" 
 
  "blocked_actions": ["!checkBlueprint", "!checkBlueprintLevel", "!getBlueprint", "!getBlueprintLevel"], // commands to disable and remove from docs. Ex: ["!setMode"]
   "code_timeout_mins": -1, // minutes code is allowed to run. -1 for no timeout
@@ -65,11 +65,12 @@ const settings = {
   // specify speech model inside each profile - so that you can have each bot with different voices ;)
 
   "stt_transcription": true, // enable speech-to-text transcription
-  "stt_provider": "pollinations", // STT provider: "groq" (requires API key) or "pollinations" (free)
+  "stt_provider": "groq", // STT provider: "groq" (requires API key) or "pollinations" (free)
   "stt_username": "koreayang", // username for STT messages
   "stt_agent_name": "claude", // agent name for STT messages, if empty it will send the STT to all bots
 
   // STT Audio Detection Settings
+  "stt_tts_cooldown": 1000, //Wait time after TTS ends before STT resumes
   "stt_rms_threshold": 500,       // Raised from 1000 to reduce false triggers
   "stt_silence_duration": 1500,   // 2 seconds of silence before stopping
   "stt_min_audio_duration": 0.5,  // Minimum audio duration in seconds
