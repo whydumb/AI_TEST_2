@@ -1,7 +1,14 @@
 import { exec, spawn } from 'child_process';
 import { sendAudioRequest } from '../models/pollinations.js';
+import textToSpeech from '@google-cloud/text-to-speech';
 import { EventEmitter } from 'events';
 import { createRobotController } from '../utils/robot_controller.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const ttsEvents = new EventEmitter();
 
@@ -67,10 +74,50 @@ async function safeSpeechEnd() {
 }
 
 /**
+ * Google Cloud TTS 함수
+ * @param {string} text - 말할 텍스트
+ * @param {string} voice - 목소리 (ko-KR-Neural2-A, ko-KR-Neural2-B, ko-KR-Neural2-C)
+ * @param {string} languageCode - 언어 코드 (ko-KR, en-US 등)
+ * @returns {Promise<Buffer>} - MP3 오디오 데이터
+ */
+async function sendGoogleTTS(text, voice = 'ko-KR-Neural2-A', languageCode = 'ko-KR') {
+  try {
+    const client = new textToSpeech.TextToSpeechClient();
+    
+    console.log(`🎤 [Google TTS] Generating speech (voice: ${voice}, language: ${languageCode})`);
+    
+    const request = {
+      input: { text: text },
+      voice: {
+        languageCode: languageCode,
+        name: voice,
+        ssmlGender: voice.includes('-A') || voice.includes('-B') ? 'FEMALE' : 'MALE'
+      },
+      audioConfig: {
+        audioEncoding: 'MP3',
+        speakingRate: 1.0,  // 속도 (0.25 ~ 4.0)
+        pitch: 0.0,         // 음높이 (-20.0 ~ 20.0)
+        volumeGainDb: 0.0   // 볼륨 (-96.0 ~ 16.0)
+      },
+    };
+
+    const [response] = await client.synthesizeSpeech(request);
+    const audioBuffer = Buffer.from(response.audioContent);
+    
+    console.log(`✅ [Google TTS] Generated ${audioBuffer.length} bytes`);
+    return audioBuffer;
+    
+  } catch (err) {
+    console.error('[Google TTS] Error:', err.message);
+    throw err;
+  }
+}
+
+/**
  * Text-to-Speech with queue.
  * Keeps API compat with previous usage but now returns a Promise that resolves when playback finishes.
  * @param {string} text
- * @param {string|object} speak_model e.g. 'pollinations/openai-audio/echo'
+ * @param {string|object} speak_model e.g. 'google/ko-KR-Neural2-A' or 'pollinations/openai-audio/echo'
  * @returns {Promise<void>}
  */
 export function say(text, speak_model) {
@@ -83,9 +130,16 @@ export function say(text, speak_model) {
 async function processQueue() {
   if (speakingQueue.length === 0) {
     isSpeaking = false;
+    // ✅ TTS 종료 알림 (STT 재개 가능)
+    global.isTTSPlaying = false;
+    ttsEvents.emit('speaking-ended');
     return;
   }
   isSpeaking = true;
+  
+  // ✅ TTS 시작 알림 (STT 일시정지)
+  global.isTTSPlaying = true;
+  ttsEvents.emit('speaking-started');
 
   const job = speakingQueue.shift();
   const txt = job.text;
@@ -95,7 +149,7 @@ async function processQueue() {
 
   const isWin = process.platform === 'win32';
   const isMac = process.platform === 'darwin';
-  const model = speak_model || 'pollinations/openai-audio/echo';
+  const model = speak_model || 'google/ko-KR-Neural2-A';
 
   // 공통: 시작 이벤트/LED
   try { ttsEvents.emit('start', { text: txt, model }); } catch {}
@@ -134,61 +188,108 @@ async function processQueue() {
     });
 
   } else {
-    // --- Remote audio provider (Pollinations/OpenAI proxy) ---
-    let prov, mdl, voice, url;
+    // --- Parse model string ---
+    let prov, voice, languageCode, url;
     if (typeof model === "string") {
-      [prov, mdl, voice] = model.split('/');
-      url = "https://text.pollinations.ai/openai";
+      const parts = model.split('/');
+      prov = parts[0];
+      voice = parts[1];
+      languageCode = parts[2] || (voice ? voice.split('-').slice(0, 2).join('-') : 'ko-KR');
     } else {
-      prov  = model.api;
-      mdl   = model.model;
+      prov = model.api;
       voice = model.voice;
-      url   = model.url || "https://text.pollinations.ai/openai";
-    }
-    if (prov !== 'pollinations') {
-      await finishErr(new Error(`Unknown provider: ${prov}`));
-      return;
+      languageCode = model.languageCode || 'ko-KR';
+      url = model.url;
     }
 
-    try {
-      let audioData = await sendAudioRequest(txt, mdl, voice, url);
-      if (!audioData) {
-        // 0s silence fallback
-        audioData = "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU5LjI3LjEwMAAAAAAAAAAAAAAA/+NAwAAAAAAAAAAAAEluZm8AAAAPAAAAAAAAANAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAExhdmM1OS4zNwAAAAAAAAAAAAAAAAAAAAAAAAAAAADQAAAeowAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+    // --- Google Cloud TTS ---
+    if (prov === 'google') {
+      try {
+        const audioBuffer = await sendGoogleTTS(txt, voice, languageCode);
+        
+        // ✅ Windows도 ffplay 사용 (더 안정적)
+        const tempFile = path.join(__dirname, `tts_temp_${Date.now()}.mp3`);
+        
+        try {
+          fs.writeFileSync(tempFile, audioBuffer);
+          
+          const player = spawn('ffplay', [
+            '-nodisp',      // 창 안 띄우기
+            '-autoexit',    // 재생 끝나면 자동 종료
+            '-loglevel', 'quiet',  // 로그 숨기기
+            tempFile
+          ], {
+            stdio: 'ignore'
+          });
+          
+          player.on('exit', async (code) => { 
+            try { fs.unlinkSync(tempFile); } catch {}
+            if (code === 0) await finishOk();
+            else await finishErr(new Error(`ffplay exit ${code}`));
+          });
+          
+          player.on('error', async (e) => { 
+            console.error('[TTS] ffplay error:', e.message);
+            try { fs.unlinkSync(tempFile); } catch {}
+            await finishErr(e); 
+          });
+          
+        } catch (e) {
+          try { fs.unlinkSync(tempFile); } catch {}
+          await finishErr(e);
+        }
+
+      } catch (e) {
+        console.error('Google TTS error', e);
+        await finishErr(e);
       }
 
-      if (isWin) {
-        const ps = `
-          Add-Type -AssemblyName presentationCore;
-          $p=New-Object System.Windows.Media.MediaPlayer;
-          $p.Open([Uri]::new("data:audio/mp3;base64,${audioData}"));
-          $p.Play();
-          Start-Sleep -Seconds [math]::Ceiling($p.NaturalDuration.TimeSpan.TotalSeconds);
-        `;
-        const psProcess = spawn('powershell', ['-NoProfile','-Command', ps], {
-          stdio: 'ignore', detached: true
-        });
-        psProcess.on('exit', async () => { await finishOk(); });
+    // --- Pollinations TTS ---
+    } else if (prov === 'pollinations') {
+      url = url || "https://text.pollinations.ai/openai";
+      
+      try {
+        let audioData = await sendAudioRequest(txt, voice, null, url);
+        if (!audioData) {
+          audioData = "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU5LjI3LjEwMAAAAAAAAAAAAAAA/+NAwAAAAAAAAAAAAEluZm8AAAAPAAAAAAAAANAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAExhdmM1OS4zNwAAAAAAAAAAAAAAAAAAAAAAAAAAAADQAAAeowAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+        }
 
-      } else {
-        // ffplay 경로
-        const player = spawn('ffplay', ['-nodisp','-autoexit','pipe:0'], {
-          stdio: ['pipe','ignore','ignore']
-        });
-        player.stdin.write(Buffer.from(audioData, 'base64'));
-        player.stdin.end();
-        player.on('exit', async (code) => { 
-          if (code === 0) await finishOk(); else await finishErr(new Error(`ffplay exit ${code}`));
-        });
-        player.on('error', async (e) => { 
-          console.error('ffplay spawn error', e); 
-          await finishErr(e); 
-        });
+        if (isWin) {
+          const ps = `
+            Add-Type -AssemblyName presentationCore;
+            $p=New-Object System.Windows.Media.MediaPlayer;
+            $p.Open([Uri]::new("data:audio/mp3;base64,${audioData}"));
+            $p.Play();
+            Start-Sleep -Seconds [math]::Ceiling($p.NaturalDuration.TimeSpan.TotalSeconds);
+          `;
+          const psProcess = spawn('powershell', ['-NoProfile','-Command', ps], {
+            stdio: 'ignore', detached: true
+          });
+          psProcess.on('exit', async () => { await finishOk(); });
+
+        } else {
+          const player = spawn('ffplay', ['-nodisp','-autoexit','pipe:0'], {
+            stdio: ['pipe','ignore','ignore']
+          });
+          player.stdin.write(Buffer.from(audioData, 'base64'));
+          player.stdin.end();
+          player.on('exit', async (code) => { 
+            if (code === 0) await finishOk(); 
+            else await finishErr(new Error(`ffplay exit ${code}`));
+          });
+          player.on('error', async (e) => { 
+            console.error('ffplay spawn error', e); 
+            await finishErr(e); 
+          });
+        }
+
+      } catch (e) {
+        console.error('Pollinations TTS error', e);
+        await finishErr(e);
       }
 
-    } catch (e) {
-      console.error('Audio error', e);
-      await finishErr(e);
+    } else {
+      await finishErr(new Error(`Unknown TTS provider: ${prov}`));
     }
   }
 }
