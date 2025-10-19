@@ -45,14 +45,14 @@ const settings = {
 
  "blocked_actions": ["!checkBlueprint", "!checkBlueprintLevel", "!getBlueprint", "!getBlueprintLevel"], // commands to disable and remove from docs. Ex: ["!setMode"]
   "code_timeout_mins": -1, // minutes code is allowed to run. -1 for no timeout
-  "relevant_docs_count": 5, // number of relevant code function docs to select for prompting. -1 for all
+  "relevant_docs_count": 3, // number of relevant code function docs to select for prompting. -1 for all
 
-  "max_messages": 15, // max number of messages to keep in context
-  "num_examples": 2, // number of examples to give to the model
+  "max_messages": 8, // max number of messages to keep in context
+  "num_examples": 1, // number of examples to give to the model
   "max_commands": -1, // max number of commands that can be used in consecutive responses. -1 for no limit
-  "verbose_commands": true, // show full command syntax
-  "narrate_behavior": true, // chat simple automatic actions ('Picking up item!')
-  "chat_bot_messages": true, // publicly chat messages to other bots
+  "verbose_commands": false, // show full command syntax
+  "narrate_behavior": false, // chat simple automatic actions ('Picking up item!')
+  "chat_bot_messages": false, // publicly chat messages to other bots
 
   "auto_idle_trigger": {
     "enabled": false,
@@ -70,15 +70,15 @@ const settings = {
   "stt_agent_name": "claude", // agent name for STT messages, if empty it will send the STT to all bots
 
   // STT Audio Detection Settings
-  "stt_tts_cooldown": 1000, //Wait time after TTS ends before STT resumes
+  "stt_tts_cooldown": 300, //Wait time after TTS ends before STT resumes
   "stt_rms_threshold": 500,       // Raised from 1000 to reduce false triggers
-  "stt_silence_duration": 1500,   // 2 seconds of silence before stopping
-  "stt_min_audio_duration": 0.5,  // Minimum audio duration in seconds
-  "stt_max_audio_duration": 15,   // Maximum audio duration in seconds
-  "stt_debug_audio": true,        // Enable to see what's happening
-  "stt_cooldown_ms": 500,        // Minimum time between recordings
+  "stt_silence_duration": 800,   // 2 seconds of silence before stopping
+  "stt_min_audio_duration": 0.3,  // Minimum audio duration in seconds
+  "stt_max_audio_duration": 8,   // Maximum audio duration in seconds
+  "stt_debug_audio": false,        // Enable to see what's happening
+  "stt_cooldown_ms": 300,        // Minimum time between recordings
   "stt_speech_threshold_ratio": 0.02, // Much lower - 5% instead of 15%
-  "stt_consecutive_speech_samples": 2, // Reduced from 5 to 3
+  "stt_consecutive_speech_samples": 1, // Reduced from 5 to 3
 
   "log_normal_data": false, // Logs all inputs / outputs without reasoning or vision data
   "log_reasoning_data": false, // Logs only reasoning inputs / outputs
