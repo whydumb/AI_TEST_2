@@ -4,7 +4,7 @@ import path from 'path';
 
 const defaultSettings = {
   // 로봇 HTTP 서버 베이스 URL
-  robot_base_url: process.env.ROBOT_BASE_URL || 'http://220.84.89.212:8080',
+  robot_base_url: process.env.ROBOT_BASE_URL || 'http://121.174.4.243:8080',
   http_timeout_ms: 1500,
   max_http_retries: 3,
 };
