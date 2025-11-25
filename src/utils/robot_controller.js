@@ -5,7 +5,7 @@
 // const DEFAULT_BASE = (settings?.robot_base_url) || process.env.ROBOT_BASE_URL || 'http://220.119.231.6:8080';
 
 // 외부에 settings가 없을 수도 있으니, 안전한 폴백만 사용:
-const DEFAULT_BASE = process.env.ROBOT_BASE_URL || 'http://220.119.231.6:8080';
+const DEFAULT_BASE = process.env.ROBOT_BASE_URL || 'http://121.174.4.243:8080';
 
 export class RobotController {
   constructor(baseUrl = DEFAULT_BASE, opts = {}) {
@@ -197,7 +197,7 @@ export function createRobotController(opts = {}) {
   const baseUrl =
     opts.baseUrl ||
     process.env.ROBOT_BASE_URL ||
-    'http://220.119.231.6:8080';
+    'http://121.174.4.243:8080';
 
   return new RobotController(baseUrl, {
     debug: opts.debug ?? (process.env.NODE_ENV === 'development'),
