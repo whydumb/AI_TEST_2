@@ -1,10 +1,16 @@
 // src/agent/vision/vision_interpreter.js
+// ============================================================
+// VISION INTERPRETER - Uses centralized RobotService from mind_server
+// Camera capture does NOT require lock (always allowed)
+// ============================================================
+
 import fs from 'fs/promises';
 import path from 'path';
 
+// Import centralized RobotService from mind_server
+import { getRobotService } from '../../server/mind_server.js';
+
 const defaultSettings = {
-  // 로봇 HTTP 서버 베이스 URL
-  robot_base_url: process.env.ROBOT_BASE_URL || 'http://121.174.4.243:8080',
   http_timeout_ms: 1500,
   max_http_retries: 3,
 };
@@ -13,14 +19,15 @@ export class VisionInterpreter {
   /**
    * @param {object} agent  - { name, prompter: { promptVision(buf, prompt) } }
    * @param {'off'|'prompted'|'always'} vision_mode
-   * @param {object} [opts]
-   * @param {object} [opts.controller] - RobotController 인스턴스(선택). 있으면 fetchCameraBuffer 사용
+   * @param {object} [opts] - Options (controller param is deprecated, uses centralized RobotService)
    */
   constructor(agent, vision_mode, opts = {}) {
     this.agent = agent;
     this.vision_mode = vision_mode;
-    this.controller = opts.controller ?? null;
     this.fp = `./bots/${agent.name}/screenshots`;
+    
+    // Use centralized RobotService instead of passed controller
+    this.robot = getRobotService();
 
     this._ensureDirectory();
 
@@ -31,11 +38,11 @@ export class VisionInterpreter {
           return await this.captureFromRobotHTTP(settings);
         },
       };
-      console.log('📸 Vision interpreter initialized (robot-http only)');
+      console.log('📸 Vision interpreter initialized (using centralized RobotService)');
     }
   }
 
-  // ===================== 설정 & 유틸 =====================
+  // ===================== Settings & Utils =====================
 
   async _getSettings() {
     let settings = defaultSettings;
@@ -57,7 +64,7 @@ export class VisionInterpreter {
     }
   }
 
-  // Node 18+는 global fetch, 구버전은 node-fetch 동적 임포트
+  // Node 18+ has global fetch, older versions need node-fetch
   async _fetchBuffer(url, timeoutMs = 1500, accept = 'image/jpeg') {
     let fetchFn = globalThis.fetch;
     if (typeof fetchFn === 'undefined') {
@@ -85,7 +92,7 @@ export class VisionInterpreter {
     }
   }
 
-  // ===================== 검증 함수들 =====================
+  // ===================== Validation Functions =====================
 
   async _ensureNonEmptyFile(filepath) {
     try {
@@ -157,7 +164,7 @@ export class VisionInterpreter {
       if (metadata.width < 100 || metadata.height < 100) {
         throw new Error(`Too small: ${metadata.width}x${metadata.height}`);
       }
-      // 디코드 테스트(손상 감지)
+      // Decode test (corruption detection)
       await sharp(filepath).raw().toBuffer();
 
       console.log('✅ Sharp validation passed');
@@ -168,14 +175,14 @@ export class VisionInterpreter {
     }
   }
 
-  // ===================== 📷 Robot HTTP 전용 캡처 =====================
+  // ===================== Robot HTTP Camera Capture =====================
+  // Camera capture does NOT require Action Lock (always allowed)
 
   async captureFromRobotHTTP(settings) {
     await this._ensureDirectory();
 
     const maxRetries = settings.max_http_retries ?? 3;
     const timeoutMs = settings.http_timeout_ms ?? 1500;
-    const base = (settings.robot_base_url || '').replace(/\/$/, '');
     let lastError = null;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -187,12 +194,15 @@ export class VisionInterpreter {
         console.log(`\n🌐 Robot HTTP capture ${attempt}/${maxRetries}`);
         let buf;
 
-        if (this.controller && typeof this.controller.fetchCameraBuffer === 'function') {
-          // 컨트롤러 경유 (재시도/백오프 정책 재사용)
-          buf = await this.controller.fetchCameraBuffer({ timeoutMs });
-        } else {
-          // 직접 GET
-          const url = `${base}/camera?t=${ts}`;
+        // Use centralized RobotService for camera capture
+        // Camera access does NOT require lock - always allowed
+        try {
+          buf = await this.robot.fetchCameraBuffer({ timeoutMs });
+        } catch (robotErr) {
+          console.warn(`🤖 RobotService camera failed: ${robotErr.message}, trying direct fetch`);
+          // Fallback to direct fetch if RobotService fails
+          const robotBaseUrl = process.env.ROBOT_BASE_URL || 'http://121.174.4.243:8080';
+          const url = `${robotBaseUrl}/camera?t=${ts}`;
           buf = await this._fetchBuffer(url, timeoutMs, 'image/jpeg');
         }
 
@@ -202,7 +212,7 @@ export class VisionInterpreter {
 
         await fs.writeFile(filepath, buf);
 
-        // 검증 3단계
+        // 3-stage validation
         await this._ensureNonEmptyFile(filepath);
         await this._ensureJPEGMarkers(filepath);
         const okSharp = await this._validateImageWithSharp(filepath);
@@ -226,7 +236,7 @@ export class VisionInterpreter {
     return null;
   }
 
-  // ===================== 이미지 분석 =====================
+  // ===================== Image Analysis =====================
 
   async analyzeImage(filename, prompt = 'Describe what you see in this image.') {
     if (!filename) return 'Error: No filename provided.';
@@ -264,7 +274,7 @@ export class VisionInterpreter {
     }
   }
 
-  // ===================== 파일 관리 =====================
+  // ===================== File Management =====================
 
   async listImages() {
     try {
