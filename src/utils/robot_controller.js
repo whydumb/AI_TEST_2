@@ -1,212 +1,258 @@
 // src/utils/robot_controller.js
+// ============================================================
+// BACKWARD COMPATIBILITY WRAPPER
+// This file now wraps the centralized RobotService from mind_server
+// Old code using createRobotController() will automatically use centralized service
+// ============================================================
 
-// (선택) settings를 동기로 읽고 싶다면 이렇게:
-// import settings from '../../settings.js';
-// const DEFAULT_BASE = (settings?.robot_base_url) || process.env.ROBOT_BASE_URL || 'http://220.119.231.6:8080';
+// Re-export RobotService as RobotController for backward compatibility
+import { getRobotService, RobotService, initRobotService } from '../server/mind_server.js';
 
-// 외부에 settings가 없을 수도 있으니, 안전한 폴백만 사용:
+// Legacy environment variable support
 const DEFAULT_BASE = process.env.ROBOT_BASE_URL || 'http://121.174.4.243:8080';
 
+/**
+ * RobotController class - Now just a thin wrapper around centralized RobotService
+ * Maintains backward compatibility with existing code
+ */
 export class RobotController {
   constructor(baseUrl = DEFAULT_BASE, opts = {}) {
-    // 슬래시 정리
-    this.baseUrl = String(baseUrl).replace(/\/+$/, '');
-    this.timeoutMs = opts.timeoutMs ?? 800;
-    this.retries   = opts.retries   ?? 2;
-    this.debug     = opts.debug     ?? false;
-
-    this.connected = false;
-    this.lastError = null;
-
-    // 로컬 상태
-    this.blinkState = false;
-    this.trackState = true;
-
-    // 백오프
-    this.consecutiveFailures   = 0;
-    this.maxConsecutiveFailures = 3;
-    this.backoffTime = 0;
-
-    if (this.debug) console.log(`🤖 RobotController: ${this.baseUrl}`);
-  }
-
-  // ----------------- 내부 유틸 -----------------
-  async _get(path, tm = this.timeoutMs) {
-    // 연속 실패 백오프
-    if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
-      const backoffDelay = Math.min(
-        1000 * Math.pow(2, this.consecutiveFailures - this.maxConsecutiveFailures),
-        10000
-      );
-      if (Date.now() < this.backoffTime) {
-        throw new Error(
-          `Rate limited. Retry after ${Math.ceil((this.backoffTime - Date.now())/1000)}s`
-        );
-      } else {
-        this.backoffTime = Date.now() + backoffDelay;
-      }
+    // Use the centralized singleton RobotService
+    // If a different baseUrl is provided, reinitialize the service (not recommended)
+    if (baseUrl !== DEFAULT_BASE && opts.reinitialize) {
+      console.warn('⚠️ [RobotController] Creating new RobotService with custom URL. Consider using getRobotService() instead.');
+      this._service = initRobotService(baseUrl);
+    } else {
+      this._service = getRobotService();
     }
-
-    const url = `${this.baseUrl}${path}`;
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(new Error('Request timeout')), tm);
-
-    try {
-      if (this.debug) console.log(`GET ${url}`);
-      const res = await fetch(url, {
-        method: 'GET',
-        signal: ac.signal,
-        headers: {
-          'User-Agent': 'RobotController/2.0',
-          'Accept': 'application/json, text/html, */*',
-          'Cache-Control': 'no-cache',
-        },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-
-      this.consecutiveFailures = 0;
-      this.connected = true;
-      this.lastError = null;
-      return res;
-    } catch (err) {
-      this.consecutiveFailures++;
-      this.connected = false;
-      this.lastError = err.message;
-      if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
-        this.backoffTime =
-          Date.now() + 1000 * Math.pow(2, this.consecutiveFailures - this.maxConsecutiveFailures);
-      }
-      if (err.name === 'AbortError') throw new Error(`Request timeout after ${tm}ms`);
-      throw err;
-    } finally {
-      clearTimeout(timer);
+    
+    this.agentName = opts.agentName || 'agent';
+    this.debug = opts.debug ?? false;
+    
+    if (this.debug) {
+      console.log(`🤖 RobotController (wrapper): Using centralized RobotService`);
     }
   }
 
-  async _retry(fn, label = '') {
-    let lastErr;
-    for (let i = 0; i <= this.retries; i++) {
-      try {
-        const r = await fn();
-        if (this.debug && i > 0) console.log(`✔ ${label} retry ${i} ok`);
-        return r;
-      } catch (e) {
-        lastErr = e;
-        if (i < this.retries) {
-          if (this.debug) console.log(`↻ ${label} retry ${i+1}: ${e.message}`);
-          await new Promise(r => setTimeout(r, 200 * (i + 1)));
-        }
-      }
-    }
-    throw new Error(`${label} failed: ${lastErr?.message || lastErr}`);
+  // ===================== Proxy Properties =====================
+  
+  get baseUrl() { return this._service.baseUrl; }
+  get connected() { return this._service.connected; }
+  get lastError() { return this._service.lastError; }
+  get blinkState() { return this._service.blinkState; }
+  get trackState() { return this._service.trackState; }
+
+  // ===================== Connection & Diagnostics =====================
+
+  async ping() {
+    return this._service.ping();
   }
 
-  // ----------------- 연결/진단 -----------------
-  async ping() { try { await this._get('/', 600); return true; } catch { return false; } }
   async ensureConnection() {
-    if (!this.connected) {
-      const ok = await this.ping();
-      if (!ok) throw new Error(`Robot not reachable at ${this.baseUrl}`);
-    }
-    return true;
+    return this._service.ensureConnection();
   }
 
-  // 요구 코드가 기대하는 메서드 (복구)
   async healthCheck() {
-    const t0 = Date.now();
-    const online = await this.ping();
-    return {
-      online,
-      latency: Date.now() - t0,
-      status: { blinkMode: this.blinkState, trackMode: this.trackState },
-      connection: {
-        baseUrl: this.baseUrl,
-        connected: this.connected,
-        consecutiveFailures: this.consecutiveFailures,
-        lastError: this.lastError,
-        backoffMs: Math.max(0, this.backoffTime - Date.now()),
-      },
-    };
+    return this._service.healthCheck();
   }
-
-  // ----------------- Blink / Track -----------------
-  async toggleBlink() { await this.ensureConnection(); await this._retry(() => this._get('/?blink=toggle'), 'toggleBlink'); this.blinkState = !this.blinkState; }
-  async setBlink(on)   { await this.ensureConnection(); if (this.blinkState !== on) await this.toggleBlink(); }
-
-  async toggleTrack() { await this.ensureConnection(); await this._retry(() => this._get('/?track=toggle'), 'toggleTrack'); this.trackState = !this.trackState; }
-  async setTrack(on)  { await this.ensureConnection(); if (this.trackState !== on) await this.toggleTrack(); }
 
   async getStatus() {
-    try {
-      await this.ensureConnection();
-      return { blinkMode: this.blinkState, trackMode: this.trackState, connected: this.connected };
-    } catch {
-      return { error: 'Status not available', lastError: this.lastError, connected: this.connected,
-               blinkMode: this.blinkState, trackMode: this.trackState };
+    return this._service.getStatus();
+  }
+
+  // ===================== Blink / Track (NO LOCK) =====================
+
+  async toggleBlink() {
+    return this._service.toggleBlink();
+  }
+
+  async setBlink(on) {
+    return this._service.setBlink(on);
+  }
+
+  async toggleTrack() {
+    return this._service.toggleTrack();
+  }
+
+  async setTrack(on) {
+    return this._service.setTrack(on);
+  }
+
+  async onSpeechStart() {
+    return this._service.onSpeechStart();
+  }
+
+  async onSpeechEnd() {
+    return this._service.onSpeechEnd();
+  }
+
+  // ===================== ACTION LOCK METHODS (NEW) =====================
+
+  /**
+   * Check if agent can execute motion commands
+   * @returns {boolean}
+   */
+  canAgentExecute() {
+    return this._service.canAgentExecute(this.agentName);
+  }
+
+  /**
+   * Get current lock status
+   */
+  getLockStatus() {
+    return this._service.getLockStatus();
+  }
+
+  /**
+   * Acquire lock for this agent
+   */
+  acquireLock(options = {}) {
+    return this._service.acquireLock(this.agentName, 'agent', options);
+  }
+
+  /**
+   * Release lock
+   */
+  releaseLock() {
+    return this._service.releaseLock(this.agentName, 'agent');
+  }
+
+  /**
+   * Trigger external RL task
+   * @param {string} taskType - Type of task (e.g., 'fetch_object')
+   * @param {object} params - Task parameters
+   */
+  async triggerExternalRL(taskType, params = {}) {
+    return this._service.triggerExternalRL(taskType, {
+      ...params,
+      requester: this.agentName
+    });
+  }
+
+  // ===================== Motion Commands (LOCK REQUIRED) =====================
+
+  async sendMotion(page) {
+    const result = await this._service.sendMotion(page, this.agentName);
+    if (!result.success) {
+      throw new Error(result.error || 'Motion blocked by lock');
     }
   }
 
-  async onSpeechStart(){ try{ await this.setBlink(true);  if (this.debug) console.log('🎤 blink ON'); return true; } catch { return false; } }
-  async onSpeechEnd(){   try{ await this.setBlink(false); if (this.debug) console.log('🎤 blink OFF'); return true; } catch { return false; } }
-
-  // ----------------- 모션 -----------------
-  async sendMotion(page){ await this.ensureConnection(); await this._retry(() => this._get(`/?motion=${page}`), `sendMotion(${page})`); }
-  async waveHand(){ return this.sendMotion(38); }
-  async applaud(){  return this.sendMotion(24); }
-  async tiltHi(){   return this.sendMotion(4);  }
-  async talk1(){    return this.sendMotion(6);  }
-  async talk2(){    return this.sendMotion(29); }
-  async rightKick(){return this.sendMotion(12); }
-  async leftKick(){ return this.sendMotion(13); }
-  async rightPass(){return this.sendMotion(70); }
-  async leftPass(){ return this.sendMotion(71); }
-  async nodYes(){   return this.sendMotion(2);  }
-  async shakeNo(){  return this.sendMotion(3);  }
-  async armYes(){   return this.sendMotion(23); }
-  async armHeadYes(){return this.sendMotion(27);}
-  async stretch(){  return this.sendMotion(31); }
-  async jump(){     return this.sendMotion(237);}
-  async quickJump(){return this.sendMotion(239);}
-
-  // ----------------- /info & /camera -----------------
-  async getInfo() {
-    await this.ensureConnection();
-    const res = await this._retry(() => this._get('/info', this.timeoutMs), 'getInfo');
-    const txt = await res.text();
-    try { return JSON.parse(txt); } catch { return { raw: txt }; }
+  async waveHand() {
+    const result = await this._service.waveHand(this.agentName);
+    if (!result.success) throw new Error(result.error);
   }
 
-  async fetchCameraBuffer({ timeoutMs } = {}) {
-    await this.ensureConnection();
-    const t = timeoutMs ?? this.timeoutMs;
-    const res = await this._retry(() => this._get(`/camera?t=${Date.now()}`, t), 'fetchCameraBuffer');
-    const ab = await res.arrayBuffer();
-    return Buffer.from(ab);
+  async applaud() {
+    const result = await this._service.applaud(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async tiltHi() {
+    const result = await this._service.tiltHi(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async talk1() {
+    const result = await this._service.talk1(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async talk2() {
+    const result = await this._service.talk2(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async rightKick() {
+    const result = await this._service.rightKick(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async leftKick() {
+    const result = await this._service.leftKick(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async rightPass() {
+    const result = await this._service.rightPass(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async leftPass() {
+    const result = await this._service.leftPass(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async nodYes() {
+    const result = await this._service.nodYes(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async shakeNo() {
+    const result = await this._service.shakeNo(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async armYes() {
+    const result = await this._service.armYes(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async armHeadYes() {
+    const result = await this._service.armHeadYes(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async stretch() {
+    const result = await this._service.stretch(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async jump() {
+    const result = await this._service.jump(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async quickJump() {
+    const result = await this._service.quickJump(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  // ===================== Camera (NO LOCK) =====================
+
+  async getInfo() {
+    return this._service.getInfo();
+  }
+
+  async fetchCameraBuffer(opts = {}) {
+    return this._service.fetchCameraBuffer(opts);
   }
 
   async downloadFrame(filePath, opts = {}) {
-    const buf = await this.fetchCameraBuffer(opts);
-    const fs = await import('fs/promises');
-    await fs.writeFile(filePath, buf);
-    return { filePath, bytes: buf.length };
+    return this._service.downloadFrame(filePath, opts);
   }
 }
 
-// ✅ 동기 팩토리 (Promise 아님)
+/**
+ * Factory function - backward compatible with existing code
+ * @param {object} opts - Options
+ * @returns {RobotController}
+ */
 export function createRobotController(opts = {}) {
-  const baseUrl =
-    opts.baseUrl ||
-    process.env.ROBOT_BASE_URL ||
-    'http://121.174.4.243:8080';
+  const baseUrl = opts.baseUrl || process.env.ROBOT_BASE_URL || DEFAULT_BASE;
 
   return new RobotController(baseUrl, {
     debug: opts.debug ?? (process.env.NODE_ENV === 'development'),
     timeoutMs: opts.timeoutMs ?? 800,
-    retries:   opts.retries   ?? 2,
+    retries: opts.retries ?? 2,
+    agentName: opts.agentName || 'agent',
     ...opts,
   });
 }
 
-// ⚙️ 호환성: default export도 제공 (import rc from ... / rc.createRobotController())
+// Default export for compatibility
 const defaultExport = { RobotController, createRobotController };
 export default defaultExport;
+
+// Also export RobotService for direct access
+export { getRobotService, RobotService };
