@@ -218,6 +218,29 @@ export class RobotController {
     if (!result.success) throw new Error(result.error);
   }
 
+  async startWalk(vector) {
+    const result = await this._service.startWalk(this.agentName);
+    if (!result.success) throw new Error(result.error);
+    if (vector) {
+      await this.setWalkVector(vector);
+    }
+  }
+
+  async stopWalk() {
+    const result = await this._service.stopWalk(this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async setWalkVector(vector = {}) {
+    const result = await this._service.setWalkVector(vector, this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
+  async setJoint(index, value) {
+    const result = await this._service.setJoint(index, value, this.agentName);
+    if (!result.success) throw new Error(result.error);
+  }
+
   // ===================== Camera (NO LOCK) =====================
 
   async getInfo() {
