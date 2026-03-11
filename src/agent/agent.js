@@ -1,6 +1,7 @@
 // src/agent/agent.js
 import fs from 'fs';
 import path from 'path';
+import process from 'node:process';
 import * as logger from '../../logger.js';
 import { History } from './history.js';
 import { Coder } from './coder.js';
@@ -25,8 +26,35 @@ import convoManager from './conversation.js';
 import { handleTranslation, handleEnglishTranslation } from '../utils/translator.js';
 import settings from '../../settings.js';
 import { serverProxy } from './agent_proxy.js';
-import { Task } from './tasks/tasks.js';
 import { say } from './speak.js';
+
+class FallbackTask {
+  constructor(_agent, _taskPath = null, task_id = null, taskStart = Date.now()) {
+    this.task_id = task_id;
+    this.taskStartTime = taskStart;
+    this.blocked_actions = [];
+    this.agent_names = [];
+    this.blueprint = null;
+  }
+
+  initBotTask() {}
+  setAgentGoal() {}
+}
+
+let taskModulePromise = null;
+
+function getTaskClass() {
+  if (!taskModulePromise) {
+    taskModulePromise = import('./tasks/tasks.js')
+      .then((mod) => mod.Task || FallbackTask)
+      .catch((error) => {
+        console.warn('Task module unavailable, using fallback task stub:', error.message);
+        return FallbackTask;
+      });
+  }
+
+  return taskModulePromise;
+}
 
 // ✅ 내부 로그 메시지 목록 (발화/채팅 출력 억제 대상)
 const INTERNAL_LOG_MESSAGES = [
@@ -38,6 +66,7 @@ const INTERNAL_LOG_MESSAGES = [
 
 export class Agent {
   constructor() {
+    this.runtime_mode = 'minecraft';
     this._lastChatTime = Date.now();
     this._idleTriggered = false;
     this._lastModelResponseTime = Date.now();
@@ -52,7 +81,7 @@ export class Agent {
     this.last_sender = null;
 
     // STT 코드에서 agent 접근 가능하게 글로벌에 붙임
-    const globalObj = (typeof global !== 'undefined') ? global : globalThis;
+    const globalObj = globalThis;
     try { globalObj.agent = this; } catch (e) { console.warn('Failed attaching agent to global object:', e); }
 
     this.latestScreenshotPath = null;
@@ -77,7 +106,8 @@ export class Agent {
     let save_data = null;
     if (load_mem) save_data = this.history.load();
     const taskStart = save_data ? save_data.taskStart : Date.now();
-    this.task = new Task(this, task_path, task_id, taskStart);
+    const TaskClass = await getTaskClass();
+    this.task = new TaskClass(this, task_path, task_id, taskStart);
     this.blocked_actions = settings.blocked_actions.concat(this.task.blocked_actions || []);
     blacklistCommands(this.blocked_actions);
 
@@ -86,6 +116,9 @@ export class Agent {
     console.log(this.name, 'logging into minecraft...');
     this.bot = initBot(this.name);
     initModes(this);
+    console.log('Initializing plugins...');      await this.plugin.init();
+    console.log('Refreshing skill library...');  await this.prompter.refreshSkillLibrary();
+    await this.prompter.skill_libary.initSkillLibrary();
 
     this.bot.on('login', () => {
       console.log(this.name, 'logged in!');
@@ -488,7 +521,7 @@ export class Agent {
     return used_command;
   }
 
-  async routeResponse(to_player, message) {
+  routeResponse(to_player, message) {
     if (this.shut_up) return;
 
     const self_prompt = to_player === 'system' || to_player === this.name;
@@ -604,7 +637,7 @@ export class Agent {
       this.cleanKill('Bot kicked! Killing agent process.');
     });
 
-    this.bot.on('messagestr', async (message, _, jsonMsg) => {
+    this.bot.on('messagestr', (message, _, jsonMsg) => {
       if (jsonMsg.translate && jsonMsg.translate.startsWith('death') && message.startsWith(this.name)) {
         console.log('Agent died: ', message);
         const death_pos = this.bot.entity?.position;
@@ -647,7 +680,6 @@ export class Agent {
       this.actions.resumeAction();
     });
 
-    this.plugin.init();
     this.npc.init();
 
     const INTERVAL = 300;
