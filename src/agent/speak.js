@@ -73,6 +73,24 @@ async function safeSpeechEnd() {
   }
 }
 
+function playSystemSpeechWindows(text, onExit, onError) {
+  const cmd = [
+    'Add-Type -AssemblyName System.Speech',
+    '$s=New-Object System.Speech.Synthesis.SpeechSynthesizer',
+    '$s.Rate=2',
+    `$s.Speak('${String(text || '').replace(/'/g, "''")}')`,
+    '$s.Dispose()',
+  ].join('; ');
+
+  const proc = spawn('powershell', ['-NoProfile', '-Command', cmd], {
+    stdio: 'ignore'
+  });
+
+  proc.on('exit', onExit);
+  proc.on('error', onError);
+  return proc;
+}
+
 /**
  * Google Cloud TTS
  * @param {string} text - Text to speak
@@ -222,25 +240,62 @@ async function processQueue() {
         
         try {
           fs.writeFileSync(tempFile, audioBuffer);
-          
-          const player = spawn('ffplay', [
-            '-nodisp',
-            '-autoexit',
-            '-loglevel', 'quiet',
-            tempFile
-          ], {
-            stdio: 'ignore'
-          });
+
+          const player = isWin
+            ? spawn('powershell', ['-NoProfile', '-Command', [
+                'Add-Type -AssemblyName presentationCore',
+                `$p=New-Object System.Windows.Media.MediaPlayer`,
+                `$p.Open([Uri]::new('${tempFile.replace(/'/g, "''")}'))`,
+                'while(-not $p.NaturalDuration.HasTimeSpan){ Start-Sleep -Milliseconds 100 }',
+                '$p.Play()',
+                'Start-Sleep -Milliseconds ([Math]::Ceiling($p.NaturalDuration.TimeSpan.TotalMilliseconds)+250)',
+                '$p.Stop()',
+                '$p.Close()'
+              ].join('; ')], {
+                stdio: 'ignore'
+              })
+            : spawn('ffplay', [
+                '-nodisp',
+                '-autoexit',
+                '-loglevel', 'quiet',
+                tempFile
+              ], {
+                stdio: 'ignore'
+              });
           
           player.on('exit', async (code) => { 
             try { fs.unlinkSync(tempFile); } catch {}
-            if (code === 0) await finishOk();
-            else await finishErr(new Error(`ffplay exit ${code}`));
+            if (code === 0) {
+              console.log('[TTS] Google playback finished');
+              await finishOk();
+              return;
+            }
+
+            if (isWin) {
+              console.warn(`[TTS] Google playback exited with code ${code}; falling back to system speech`);
+              playSystemSpeechWindows(txt, async () => {
+                await finishOk();
+              }, async (fallbackErr) => {
+                await finishErr(fallbackErr);
+              });
+              return;
+            }
+
+            await finishErr(new Error(`ffplay exit ${code}`));
           });
           
           player.on('error', async (e) => { 
             console.error('[TTS] ffplay error:', e.message);
             try { fs.unlinkSync(tempFile); } catch {}
+            if (isWin) {
+              console.warn('[TTS] Falling back to Windows system speech');
+              playSystemSpeechWindows(txt, async () => {
+                await finishOk();
+              }, async (fallbackErr) => {
+                await finishErr(fallbackErr);
+              });
+              return;
+            }
             await finishErr(e); 
           });
           

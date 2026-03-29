@@ -1,11 +1,14 @@
 import settings from '../../settings.js';
 import { readFileSync } from 'fs';
-import { containsCommand } from './commands/index.js';
 import { sendBotChatToServer } from './agent_proxy.js';
 
 let agent;
 let agent_names = settings.profiles.map((p) => JSON.parse(readFileSync(p, 'utf8')).name);
 let agents_in_game = [];
+
+function hasCommandMessage(message) {
+    return /!\w+(?:\([^)]*\))?/.test(String(message || ''));
+}
 
 class Conversation {
     constructor(name) {
@@ -192,7 +195,7 @@ class ConversationManager {
             await agent.self_prompter.pause();
         }
     
-        _scheduleProcessInMessage(sender, received, convo);
+        await _scheduleProcessInMessage(sender, received, convo);
     }
 
     responseScheduledFor(sender) {
@@ -228,11 +231,11 @@ class ConversationManager {
     endConversation(sender) {
         if (this.convos[sender]) {
             this.convos[sender].end();
-            if (this.activeConversation.name === sender) {
+            if (this.activeConversation && this.activeConversation.name === sender) {
                 this._stopMonitor();
                 this.activeConversation = null;
                 if (agent.self_prompter.isPaused() && !this.inConversation()) {
-                    _resumeSelfPrompter();
+                    _resumeSelfPrompter().catch((error) => console.warn('Failed to resume self prompter:', error));
                 }
             }
         }
@@ -243,7 +246,7 @@ class ConversationManager {
             this.endConversation(sender);
         }
         if (agent.self_prompter.isPaused()) {
-            _resumeSelfPrompter();
+            _resumeSelfPrompter().catch((error) => console.warn('Failed to resume self prompter:', error));
         }
     }
 
@@ -274,7 +277,7 @@ const longDelay = 5000;
 async function _scheduleProcessInMessage(sender, received, convo) {
     if (convo.inMessageTimer)
         clearTimeout(convo.inMessageTimer);
-    let otherAgentBusy = containsCommand(received.message);
+    let otherAgentBusy = hasCommandMessage(received.message);
 
     const scheduleResponse = (delay) => convo.inMessageTimer = setTimeout(() => _processInMessageQueue(sender), delay);
 
@@ -282,7 +285,7 @@ async function _scheduleProcessInMessage(sender, received, convo) {
         // both are busy
         let canTalkOver = talkOverActions.some(a => agent.actions.currentActionLabel.includes(a));
         if (canTalkOver)
-            scheduleResponse(fastDelay)
+            scheduleResponse(fastDelay);
         // otherwise don't respond
     }
     else if (otherAgentBusy)

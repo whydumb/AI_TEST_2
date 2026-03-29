@@ -78,8 +78,24 @@ export function canonicalizeAction(commandName, rawText = '') {
             return { token: 'vector_walk', family: 'locomotion', primitive: 'vector_walk', args };
         case '!robotFaceYaw':
             return { token: 'face_yaw', family: 'orientation', primitive: 'face_yaw', args };
+        case '!robotClearYaw':
+            return { token: 'clear_yaw', family: 'orientation', primitive: 'clear_yaw', args };
+        case '!robotHeadPitch':
+            return { token: 'head_pitch', family: 'orientation', primitive: 'head_pitch', args };
+        case '!robotHeadCenter':
+            return { token: 'head_center', family: 'orientation', primitive: 'head_center', args };
         case '!robotStopWalk':
             return { token: 'stop', family: 'safety', primitive: 'stop', args };
+        case '!robotStand':
+            return { token: 'stand', family: 'posture', primitive: 'stand', args };
+        case '!robotWalkReady':
+            return { token: 'walk_ready', family: 'posture', primitive: 'walk_ready', args };
+        case '!robotSitStand':
+            return { token: 'sit_stand', family: 'recovery', primitive: 'sit_stand', args };
+        case '!robotFrontRecover':
+            return { token: 'front_recover', family: 'recovery', primitive: 'front_recover', args };
+        case '!robotBackRecover':
+            return { token: 'back_recover', family: 'recovery', primitive: 'back_recover', args };
         case '!robotWave':
         case '!robotWaveHand':
             return { token: 'wave', family: 'gesture', primitive: 'wave', args };

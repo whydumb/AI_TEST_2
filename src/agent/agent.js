@@ -10,6 +10,14 @@ import { Prompter } from '../models/prompter.js';
 import { initModes } from './modes.js';
 import { initBot } from '../utils/mcdata.js';
 import {
+  capturePendingConfirmation,
+  createExecutiveState,
+  ensureTaskContext,
+  rewriteMessageForExecutive,
+  resolveTaskAfterCommand,
+  shouldSuppressAmbient,
+} from '../executive/minimal_executive.js';
+import {
   containsCommand,
   commandExists,
   executeCommand,
@@ -24,6 +32,7 @@ import { MemoryBank } from './memory_bank.js';
 import { SelfPrompter } from './self_prompter.js';
 import convoManager from './conversation.js';
 import { handleTranslation, handleEnglishTranslation } from '../utils/translator.js';
+import { stripUserFacingMarkdown } from '../utils/text.js';
 import settings from '../../settings.js';
 import { serverProxy } from './agent_proxy.js';
 import { say } from './speak.js';
@@ -75,6 +84,21 @@ export class Agent {
     this._suppressNextOutput = false;
     // ✅ 명령 디바운스(중복 실행 방지)
     this._cmdDebounce = Object.create(null);
+    this.executive = createExecutiveState();
+  }
+
+  _syncExecutiveAmbientState() {
+    const shouldSuppress = shouldSuppressAmbient(this.executive);
+    if (shouldSuppress === this.executive.ambientSuppressed) return;
+
+    this.executive.ambientSuppressed = shouldSuppress;
+    const socket = serverProxy.getSocket();
+    if (socket) {
+      socket.emit('robot-executive-ambient', {
+        suppress: shouldSuppress,
+        reason: shouldSuppress ? 'awaiting_user' : null,
+      });
+    }
   }
 
   async start(profile_fp, load_mem = false, init_message = null, count_id = 0, task_path = null, task_id = null) {
@@ -369,6 +393,15 @@ export class Agent {
         }
 
         const execute_res = await executeCommand(this, message);
+        resolveTaskAfterCommand(this.executive, {
+          executed: true,
+          success: typeof execute_res === 'object' && execute_res !== null
+            ? execute_res.success !== false
+            : !(typeof execute_res === 'string' && /error|failed|does not exist/i.test(execute_res)),
+          result: execute_res,
+          error: typeof execute_res === 'string' ? execute_res : execute_res?.error,
+        });
+        this._syncExecutiveAmbientState();
 
         const ECHO_CMD_RESULT = settings.echo_command_result_to_chat ?? false;
         if (ECHO_CMD_RESULT && execute_res) {
@@ -379,11 +412,25 @@ export class Agent {
         }
         return true;
       }
+
+      ensureTaskContext(this.executive, message);
     }
 
     if (from_other_bot) this.last_sender = source;
 
     message = await handleEnglishTranslation(message);
+
+    if (!self_prompt && !from_other_bot) {
+      const executiveRewrite = rewriteMessageForExecutive(this.executive, message);
+      if (executiveRewrite.directResponse) {
+        await this.history.add(this.name, executiveRewrite.directResponse, null);
+        this.routeResponse(source, executiveRewrite.directResponse);
+        this._syncExecutiveAmbientState();
+        return false;
+      }
+      message = executiveRewrite.messageForModel || message;
+    }
+
     console.log('received message from', source, ':', message);
 
     const checkInterrupt = () =>
@@ -419,6 +466,10 @@ export class Agent {
       // ✅ 모델에게는 system 턴을 절대 보내지 않음
       const history_for_prompt = this.history.getHistory().filter(t => t.role !== 'system');
       let res = await this.prompter.promptConvo(history_for_prompt);
+      if (!self_prompt && !from_other_bot) {
+        capturePendingConfirmation(this.executive, res);
+        this._syncExecutiveAmbientState();
+      }
 
       this._lastModelResponseTime = Date.now();
 
@@ -480,6 +531,17 @@ export class Agent {
         let execute_res = await executeCommand(this, res);
         console.log('Agent executed:', command_name, 'and got:', execute_res);
         used_command = true;
+        if (!self_prompt && !from_other_bot) {
+          resolveTaskAfterCommand(this.executive, {
+            executed: true,
+            success: typeof execute_res === 'object' && execute_res !== null
+              ? execute_res.success !== false
+              : !(typeof execute_res === 'string' && /error|failed|does not exist/i.test(execute_res)),
+            result: execute_res,
+            error: typeof execute_res === 'string' ? execute_res : execute_res?.error,
+          });
+          this._syncExecutiveAmbientState();
+        }
 
         if (execute_res) {
           let imagePathForCommandResult = null;
@@ -553,6 +615,8 @@ export class Agent {
     // suppress 상태에서도 번역은 수행
     message = (await handleTranslation(to_translate)).trim() + ' ' + remaining;
     message = message.replaceAll('\\n', ' ');
+    message = stripUserFacingMarkdown(message);
+    to_translate = stripUserFacingMarkdown(to_translate);
 
     // ✅ system/self면 web-client emit도 막음
     if (!suppress && serverProxy.getSocket()) {

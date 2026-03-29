@@ -7,6 +7,102 @@ export const TASK_TYPES = Object.freeze({
 
 const VALID_TYPES = new Set(Object.values(TASK_TYPES));
 
+const VISION_KEYWORDS = [
+    'camera',
+    'vision',
+    'see',
+    'look',
+    'image',
+    'screenshot',
+    'show me',
+    'what do you see',
+    'what can you see',
+    'what is visible',
+    'scene',
+    'view',
+    '카메라',
+    '비전',
+    '보여',
+    '보이',
+    '사진',
+    '이미지',
+    '화면',
+];
+
+const RECOVERY_KEYWORDS = [
+    'failed',
+    'failure',
+    'error',
+    'stuck',
+    'retry',
+    'again',
+    'recover',
+    'recovery',
+    'why did',
+    'why couldnt',
+    "why couldn't",
+    'why did not',
+    "why didn't",
+    '실패',
+    '오류',
+    '에러',
+    '복구',
+    '막힘',
+    '왜 못',
+    '왜 안',
+];
+
+const ACTION_KEYWORDS = [
+    'go',
+    'move',
+    'walk',
+    'turn',
+    'rotate',
+    'face',
+    'point',
+    'gesture',
+    'wave',
+    'clap',
+    'stop',
+    'halt',
+    '가',
+    '이동',
+    '걸어',
+    '회전',
+    '돌아',
+    '가리켜',
+    '손흔들',
+    '박수',
+    '멈춰',
+    '정지',
+    '앞으로',
+    '뒤로',
+    '왼쪽',
+    '오른쪽',
+];
+
+const QA_KEYWORDS = [
+    'status',
+    'state',
+    'what are you doing',
+    'what can you do',
+    'capability',
+    'battery',
+    'sensor',
+    'where is',
+    'where are',
+    'which one',
+    'is it',
+    'right now',
+    '상태',
+    '지금 뭐',
+    '가능',
+    '배터리',
+    '센서',
+    '어디',
+    '맞아',
+];
+
 function normalizeText(value) {
     return String(value || '').trim().toLowerCase();
 }
@@ -26,99 +122,31 @@ function createRoute(type, confidence, source, reason, mode = 'generic') {
 }
 
 function wantsVision(ctx, text) {
-    return ctx.environment?.shouldUsePromptedVision?.(ctx.rawMessage) === true || includesAny(text, [
-        'camera',
-        'vision',
-        'see',
-        'look',
-        'image',
-        'screenshot',
-        'show me',
-        'what do you see',
-        'what can you see',
-        'what is visible',
-        'scene',
-        'view',
-        '카메라',
-        '비전',
-        '보여',
-        '보이',
-        '장면',
-        '화면',
-    ]);
+    return ctx.environment?.shouldUsePromptedVision?.(ctx.rawMessage) === true
+        || includesAny(text, VISION_KEYWORDS);
+}
+
+function wantsAction(ctx, text) {
+    return ctx.environment?.shouldPlanImmediateCommand?.(ctx.rawMessage) === true
+        || includesAny(text, ACTION_KEYWORDS);
+}
+
+function wantsRecovery(text) {
+    return includesAny(text, RECOVERY_KEYWORDS);
+}
+
+function wantsQa(text, visualQuery) {
+    return text.includes('?')
+        || visualQuery
+        || includesAny(text, QA_KEYWORDS);
 }
 
 function ruleRoute(ctx) {
     const text = normalizeText(ctx.rawMessage);
     const visualQuery = wantsVision(ctx, text);
-    const hasRecoveryCue = includesAny(text, [
-        'failed',
-        'failure',
-        'error',
-        'stuck',
-        'retry',
-        'again',
-        'recover',
-        'recovery',
-        'why did',
-        'why couldnt',
-        "why couldn't",
-        'why did not',
-        "why didn't",
-        '실패',
-        '오류',
-        '에러',
-        '복구',
-        '막혔',
-        '왜 못',
-        '왜 안',
-    ]);
-    const hasActionCue = ctx.environment?.shouldPlanImmediateCommand?.(ctx.rawMessage) === true || includesAny(text, [
-        'go',
-        'move',
-        'walk',
-        'turn',
-        'rotate',
-        'face',
-        'point',
-        'gesture',
-        'wave',
-        'clap',
-        'stop',
-        'halt',
-        '앞으로',
-        '이동',
-        '가',
-        '걸어',
-        '회전',
-        '돌아',
-        '가리켜',
-        '손 흔들',
-        '박수',
-        '멈춰',
-        '정지',
-    ]);
-    const hasQaCue = text.includes('?') || visualQuery || includesAny(text, [
-        'status',
-        'state',
-        'what are you doing',
-        'what can you do',
-        'capability',
-        'battery',
-        'sensor',
-        'where is',
-        'where are',
-        'which one',
-        'is it',
-        'right now',
-        '상태',
-        '지금 뭐',
-        '가능',
-        '배터리',
-        '센서',
-        '어디',
-        '맞아',
-    ]);
+    const hasRecoveryCue = wantsRecovery(text);
+    const hasActionCue = wantsAction(ctx, text);
+    const hasQaCue = wantsQa(text, visualQuery);
 
     if (ctx.isSelfPromptTurn) {
         return createRoute(TASK_TYPES.ACTION, 1, 'forced', 'self-prompt continuation', 'planned');

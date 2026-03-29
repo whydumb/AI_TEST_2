@@ -119,13 +119,16 @@ export class Coder {
             skills.push(match[1]);
         }
         const allDocs = await this.agent.prompter.skill_libary.getAllSkillDocs();
+        const availableSkills = Array.isArray(allDocs)
+            ? new Set(allDocs.map((doc) => String(doc).split('\n')[0].split('.').slice(1).join('.')).filter(Boolean))
+            : new Set();
         // check function exists
-        const missingSkills = skills.filter(skill => !!allDocs[skill]);
+        const missingSkills = skills.filter(skill => !availableSkills.has(skill));
         if (missingSkills.length > 0) {
             result += 'These functions do not exist.\n';
             result += '### FUNCTIONS NOT FOUND ###\n';
             result += missingSkills.join('\n');
-            console.log(result)
+            console.log(result);
             return result;
         }
 
@@ -192,7 +195,7 @@ export class Coder {
         const mainFn = compartment.evaluate(src);
         
         if (write_result) {
-            console.error('Error writing code execution file: ' + result);
+            console.error('Error writing code execution file: ' + write_result);
             return null;
         }
         return { func:{main: mainFn}, src_lint_copy: src_lint_copy };
@@ -200,7 +203,7 @@ export class Coder {
 
     _sanitizeCode(code) {
         code = code.trim();
-        const remove_strs = ['Javascript', 'javascript', 'js']
+        const remove_strs = ['Javascript', 'javascript', 'js'];
         for (let r of remove_strs) {
             if (code.startsWith(r)) {
                 code = code.slice(r.length);
